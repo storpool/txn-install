@@ -63,16 +63,26 @@
 enum index_action {
 	ACT_CREATE,
 	ACT_PATCH,
-	ACT_OVERWRITE,
-	ACT_REMOVE,
+};
+
+static const char * const index_action_names[] = {
+	"create",
+	"patch",
 };
 
 struct index_line {
 	bool			read_any;
 	size_t			idx;
-	char			*module;
+	const char		*module;
 	enum index_action	action;
-	char			*filename;
+	const char		*filename;
+};
+
+struct txn_db {
+	const char * const dir;
+	const char * const idx;
+	FILE * const file;
+	const char * const module;
 };
 
 #define INDEX_LINE_INIT ((struct index_line){ .read_any = false, })
@@ -148,40 +158,80 @@ writen(const int fd, const char * const buf, const size_t len)
 	return (true);
 }
 
+static struct txn_db
+do_open_db(const char * const dir, const char * const idx)
+{
+	const int fd = open(idx, O_RDWR);
+	if (fd == -1)
+		err(1, "Could not open the database index '%s'", idx);
+	if (flock(fd, LOCK_EX | LOCK_NB) == -1)
+		err(1, "Could not lock the database index '%s'", idx);
+
+	FILE * const file = fdopen(fd, "r+");
+	if (file == NULL)
+		err(1, "Could not reopen the database index '%s'", idx);
+
+	const char * const module = getenv("TXN_INSTALL_MODULE");
+
+	return ((struct txn_db){
+		.dir = dir,
+		.idx = idx,
+		.file = file,
+		.module = module != NULL ? module : "unknown",
+	});
+}
+
+static struct txn_db
+open_db(void)
+{
+	const char * const dir = get_db_dir();
+	const char * const idx = get_db_index(dir);
+	return (do_open_db(dir, idx));
+}
+
+static struct txn_db
+open_or_create_db(const bool may_exist)
+{
+	const char * const dir = get_db_dir();
+	const char * const idx = get_db_index(dir);
+	struct stat sb;
+	if (stat(dir, &sb) == -1) {
+		if (errno != ENOENT)
+			err(1, "Could not check for the existence of '%s'", dir);
+		if (mkdir(dir, 0755) == -1)
+			err(1, "Could not create the database directory '%s'", dir);
+	} else if (!S_ISDIR(sb.st_mode)) {
+		errx(1, "Not a directory: %s", dir);
+	} else {
+		if (stat(idx, &sb) == -1) {
+			if (errno != ENOENT)
+				err(1, "Could not check for the existence of '%s'", idx);
+		} else if (!S_ISREG(sb.st_mode)) {
+			errx(1, "Not a regular file: %s", idx);
+		} else if (!may_exist) {
+			errx(1, "The database index '%s' already exists", idx);
+		} else {
+			return (do_open_db(dir, idx));
+		}
+	}
+
+	const int fd = open(idx, O_CREAT | O_EXCL | O_RDWR);
+	if (fd == -1)
+		err(1, "Could not create the database index '%s'", idx);
+	if (!writen(fd, INDEX_FIRST, INDEX_NUM_SIZE + 1))
+		err(1, "Could not write out an empty database index '%s'", idx);
+	if (close(fd) == -1)
+		err(1, "Could not close the newly-created database index '%s'", idx);
+	return (do_open_db(dir, idx));
+}
+
 static int
 cmd_db_init(const int argc, char * const argv[] __unused)
 {
 	if (argc > 0)
 		usage(true);
 
-	const char * const db_dir = get_db_dir();
-	const char * const db_idx = get_db_index(db_dir);
-	struct stat sb;
-	if (stat(db_dir, &sb) == -1) {
-		if (errno != ENOENT)
-			err(1, "Could not check for the existence of '%s'", db_dir);
-		if (mkdir(db_dir, 0755) == -1)
-			err(1, "Could not create the database directory '%s'", db_dir);
-	} else if (!S_ISDIR(sb.st_mode)) {
-		errx(1, "Not a directory: %s", db_dir);
-	} else {
-		if (stat(db_idx, &sb) == -1) {
-			if (errno != ENOENT)
-				err(1, "Could not check for the existence of '%s'", db_idx);
-		} else if (!S_ISREG(sb.st_mode)) {
-			errx(1, "Not a regular file: %s", db_idx);
-		} else {
-			errx(1, "The database index '%s' already exists", db_idx);
-		}
-	}
-
-	const int fd = open(db_idx, O_CREAT | O_EXCL | O_RDWR);
-	if (fd == -1)
-		err(1, "Could not create the database index '%s'", db_idx);
-	if (!writen(fd, INDEX_FIRST, strlen(INDEX_FIRST)))
-		err(1, "Could not write out an empty database index '%s'", db_idx);
-	if (close(fd) == -1)
-		err(1, "Could not close the newly-created database index '%s'", db_idx);
+	open_or_create_db(false);
 	return (0);
 }
 
@@ -250,7 +300,7 @@ read_next_index_line(FILE * const fp, const char * const db_idx, struct index_li
 		errx(1, "FIXME: go on with module '%s' at line index %zu", module, idx);
 	}
 
-	errx(1, "FIXME: read the module from %s, got line index %zu", db_idx, idx);
+	errx(1, "FIXME: read the action from %s, got line index %zu and modlule %s", db_idx, idx, module);
 }
 
 static int
@@ -259,29 +309,19 @@ cmd_list_modules(const int argc, char * const argv[] __unused)
 	if (argc > 0)
 		usage(true);
 
-	const char * const db_dir = get_db_dir();
-	const char * const db_idx = get_db_index(db_dir);
-	const int fd = open(db_idx, O_RDONLY);
-	if (fd == -1)
-		err(1, "Could not open the database index '%s'", db_idx);
-	if (flock(fd, LOCK_EX | LOCK_NB) == -1)
-		err(1, "Could not lock the database index '%s'", db_idx);
-	FILE * const fp = fdopen(fd, "r");
-	if (fp == NULL)
-		err(1, "Could not fdopen() the database index '%s'", db_idx);
-
+	const struct txn_db db = open_db();
 	struct index_line ln = INDEX_LINE_INIT;
 	char **modules;
 	size_t mlen, mall;
 	FLEXARR_INIT(modules, mlen, mall);
 	while (true) {
-		read_next_index_line(fp, db_idx, &ln);
+		read_next_index_line(db.file, db.idx, &ln);
 		if (ln.module == NULL)
 			break;
 		warnx("FIXME: process module %s", ln.module);
 	}
-	if (fclose(fp) == EOF)
-		err(1, "Could not close the database index '%s'", db_idx);
+	if (fclose(db.file) == EOF)
+		err(1, "Could not close the database index '%s'", db.idx);
 
 	for (size_t i = 0; i < mlen; i++) {
 		puts(modules[i]);
@@ -300,16 +340,166 @@ const struct {
 };
 #define NUM_CMDS (sizeof(cmds) / sizeof(cmds[0]))
 
+static const char *
+get_destination_filename(const char * const src, const char * const dst)
+{
+	struct stat sb;
+	if (stat(dst, &sb) == -1) {
+		if (errno != ENOENT)
+			err(1, "Could not check for the existence of %s", dst);
+		else
+			return dst;
+	} else if (!S_ISDIR(sb.st_mode)) {
+		return dst;
+	}
+
+	const char * const last_slash = strrchr(src, '/');
+	const char * const filename = last_slash != NULL ? last_slash + 1 : src;
+
+	const size_t len = strlen(dst);
+	const bool has_slash = len == 0 ? false : dst[len - 1] == '/';
+
+	char *full;
+	if (asprintf(&full, "%s%s%s", dst, has_slash ? "" : "/", filename) == -1)
+		err(1, "Could not build a destination pathname");
+	return (full);
+}
+
+static void
+write_db_entry(const struct txn_db * const db, const struct index_line ln)
+{
+	if (fprintf(db->file, "%06zu %s %s %s\n%06zu\n",
+	    ln.idx, ln.module, index_action_names[ln.action],
+	    ln.filename, ln.idx + 1) < 0 ||
+	    ferror(db->file))
+		err(1, "Could not write to the database index '%s'", db->idx);
+	if (fflush(db->file) == EOF)
+		err(1, "Could not sync a write to the database index '%s'", db->idx);
+}
+
+static void
+record_install(const char * const src, const char * const orig_dst, const struct txn_db * const db, const size_t line_idx)
+{
+	const char * const dst = get_destination_filename(src, orig_dst);
+	struct stat sb;
+
+	if (stat(src, &sb) == -1)
+		err(1, "Invalid source filename '%s'", src);
+	else if (!S_ISREG(sb.st_mode))
+		errx(1, "Not a regular source file: '%s'", src);
+
+	if (stat(dst, &sb) == -1) {
+		if (errno != ENOENT)
+			err(1, "Could not check for the existence of the destination file '%s'", dst);
+
+		write_db_entry(db, (struct index_line){
+			.idx = line_idx,
+			.module = db->module,
+			.action = ACT_CREATE,
+			.filename = dst,
+		});
+		return;
+	}
+
+	/* But is it a text file? */
+	{
+		int fds[2];
+		if (pipe(fds) == -1)
+			err(1, "Could not create a pipe for file(1) on '%s'", src);
+
+		const pid_t pid = fork();
+		if (pid == -1) {
+			err(1, "Could not fork for file(1) on '%s'", src);
+		} else if (pid == 0) {
+			if (close(fds[0]) == -1)
+				err(1, "Could not close the read end of the pipe for '%s'", src);
+			if (dup2(fds[1], 1) == -1)
+				err(1, "Could not reopen the standard output for '%s'", src);
+			execlp("file", "file", "--", src, NULL);
+			err(1, "Could not execute file(1) on '%s'", src);
+		}
+
+		if (close(fds[1]) == -1)
+			err(1, "Could not close the write end of the pipe for '%s'", src);
+		FILE * const filefile = fdopen(fds[0], "r");
+		if (filefile == NULL)
+			err(1, "Could not reopen the read end of the pipe for '%s'", src);
+
+		char *fline = NULL;
+		size_t len = 0;
+		if (getline(&fline, &len, filefile) == -1)
+			err(1, "Could not read a line from the output of file(1) on '%s'", src);
+		fclose(filefile);
+
+		const size_t srclen = strlen(src);
+		if (len < srclen + 2)
+			errx(1, "Could not parse the output of file(1) on '%s': line too short: %s", src, fline);
+		if (strncmp(fline, src, srclen) != 0 ||
+		    strncmp(fline + srclen, ": ", 2) != 0)
+			errx(1, "Could not parse the output of file(1) on '%s': line starts weirdly: %s", src, fline);
+		errx(1, "FIXME: parse the rest of the output of file(1) on '%s': %s", src, fline + srclen + 2);
+	}
+	errx(1, "FIXME: record the installation of %s to %s into %s as %zu", src, dst, db->idx, line_idx);
+}
+
+static bool
+run_install(const int argc, char * const argv[])
+{
+	char **args = malloc((argc + 1) * sizeof(*args));
+	if (args == NULL) {
+		warn("Could not allocate memory");
+		return (false);
+	}
+	args[0] = strdup("install");
+	for (int i = 1; i < argc; i++)
+		args[i] = argv[i];
+	args[argc] = NULL;
+
+	const pid_t pid = fork();
+	if (pid == -1) {
+		warn("Could not fork for install(1)");
+		return (false);
+	} else if (pid == 0) {
+		execvp("install", args);
+		err(1, "Could not run install(1)");
+	}
+
+	int stat;
+	const int res = waitpid(pid, &stat, 0);
+	if (res == -1) {
+		warn("Could not wait for install(1) to complete");
+		return (false);
+	} else if (!WIFEXITED(stat) || WEXITSTATUS(stat) != 0) {
+		warn("install(1) failed");
+		return (false);
+	}
+	return (true);
+}
+
+static void
+rollback_install(const long pos, const struct txn_db * const db, const size_t line_idx)
+{
+	errx(1, "FIXME: roll back an installation at position %ld, index %zu in %s", pos, line_idx, db->idx);
+}
+
 int
-main(int argc, char * const argv[])
+main(const int argc, char * const argv[])
 {
 	bool hflag = false, Vflag = false, noop = false;
 	int ch;
 	const char *transcmd = NULL;
-	while (ch = getopt(argc, argv, "hNVvX:-:"), ch != -1)
+	while (ch = getopt(argc, argv, "chNm:VvX:-:"), ch != -1)
 		switch (ch) {
+			case 'c':
+				/* That's the only available mode of operation; ignored. */
+				break;
+
 			case 'h':
 				hflag = true;
+				break;
+
+			case 'm':
+				/* We don't really care about the mode, do we? */
 				break;
 
 			case 'N':
@@ -350,8 +540,8 @@ main(int argc, char * const argv[])
 	if (Vflag || hflag)
 		return (0);
 
-	argc -= optind;
-	argv += optind;
+	const int pos_argc = argc - optind;
+	char * const * const pos_argv = argv + optind;
 
 	if (transcmd != NULL) {
 		if (strcmp(transcmd, "list") == 0) {
@@ -362,25 +552,33 @@ main(int argc, char * const argv[])
 		}
 		for (size_t i = 0; i < NUM_CMDS; i++)
 			if (strcmp(transcmd, cmds[i].name) == 0)
-				return cmds[i].func(argc, argv);
+				return cmds[i].func(pos_argc, pos_argv);
 		errx(1, "Invalid command '%s', use '-X list' for a list", transcmd);
 	}
 
-	if (argc < 1)
+	if (pos_argc < 2)
 		usage(true);
 
-	/* OK, really process the command-line arguments */
-	for (int i = 0; i < argc; i++) {
-		if (noop) {
-			puts(argv[i]);
-		} else {
-			const char * const fname = argv[i];
-			debug("Processing %s\n", fname);
-			struct stat sb;
-			if (stat(fname, &sb) == -1)
-				err(1, "Could not examine '%s'", fname);
-			printf("%s %jd\n", fname, (intmax_t)sb.st_size);
-		}
+	(void)noop; // FIXME: remove me
+	(void)debug; // FIXME: remove me
+
+	const struct txn_db db = open_or_create_db(true);
+	if (fseek(db.file, -(INDEX_NUM_SIZE + 1), SEEK_END) == -1)
+		err(1, "Could not seek almost to the end of the database index '%s'", db.idx);
+	struct index_line ln = INDEX_LINE_INIT;
+	read_next_index_line(db.file, db.idx, &ln);
+	if (ln.module != NULL)
+		errx(1, "Internal error, the last line of the database index should really be a last one...");
+
+	const char * const destination = pos_argv[pos_argc - 1];
+	for (int i = 0; i < pos_argc - 1; i++) {
+		if (fseek(db.file, -(INDEX_NUM_SIZE + 1), SEEK_CUR) == -1)
+			err(1, "Could not seek back in the database index '%s'", db.idx);
+		const long rollback_pos = ftell(db.file);
+		record_install(pos_argv[i], destination, &db, ln.idx);
+		if (!run_install(argc, argv))
+			rollback_install(rollback_pos, &db, ln.idx);
+		ln.idx++;
 	}
 	return (0);
 }

@@ -33,7 +33,7 @@ use Path::Tiny;
 use Test::More;
 use Test::Command;
 
-my $prog = $ENV{TEST_PROG} // './txn-install';
+my $prog = $ENV{TEST_PROG} // './txn';
 
 my $version_line;
 my @usage_lines;
@@ -62,8 +62,8 @@ my $tempdir = tempdir(CLEANUP => 1);
 my $tempd = path($tempdir);
 my $data = $tempd->child('data');
 my $dbdir = $tempd->child('db');
-my $dbidx = $dbdir->child('txn-install.index');
-my $dbfirst = $dbdir->child('txn-install.000000');
+my $dbidx = $dbdir->child('txn.index');
+my $dbfirst = $dbdir->child('txn.000000');
 
 $data->mkpath({ mode => 0755 });
 $dbdir->mkpath({ mode => 0755 });

@@ -96,8 +96,8 @@ static void
 usage(const bool _ferr)
 {
 	const char * const s =
-	    "Usage:\ttxn-install [-Nv] filename...\n"
-	    "\ttxn-install -V | -h\n"
+	    "Usage:\ttxn [-Nv] filename...\n"
+	    "\ttxn -V | -h\n"
 	    "\n"
 	    "\t-h\tdisplay program usage information and exit\n"
 	    "\t-N\tno operation mode; display what would have been done\n"
@@ -112,7 +112,7 @@ usage(const bool _ferr)
 static void
 version(void)
 {
-	puts("txn-install 0.1.0.dev1");
+	puts("txn 0.1.0.dev1");
 }
 
 static void
@@ -131,14 +131,14 @@ get_db_dir(void)
 {
 	const char * const db_env = getenv("TXN_INSTALL_DB");
 
-	return (db_env != NULL ? db_env : "/var/lib/txn-install");
+	return (db_env != NULL ? db_env : "/var/lib/txn");
 }
 
 static const char *
 get_db_index(const char * const db_dir)
 {
 	char *idx;
-	const int res = asprintf(&idx, "%s/txn-install.index", db_dir);
+	const int res = asprintf(&idx, "%s/txn.index", db_dir);
 	if (res == -1)
 		err(1, "Could not allocate memory for the index filename");
 	return (idx);

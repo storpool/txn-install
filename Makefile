@@ -24,7 +24,7 @@
 # OUT OF THE USE OF THIS SOFTWARE, EVEN IF ADVISED OF THE POSSIBILITY OF
 # SUCH DAMAGE.
 
-PROG=		txn-install
+PROG=		txn
 SRCS=		txn-install.c
 OBJS=		txn-install.o
 
@@ -40,8 +40,6 @@ CFLAGS_WARN?=	-Wall -W -Wextra
 
 CFLAGS?=	${CFLAGS_OPT}
 CFLAGS+=	${CFLAGS_STD} ${CFLAGS_WARN}
-
-LDLIBS=		-larchive
 
 # FIXME: comment -Werror out at some point
 CFLAGS+=	-Werror
@@ -66,5 +64,6 @@ test-real:	${PROG}
 test:		test-real
 
 ${PROG}:	${OBJS}
+		${CC} ${LDFLAGS} -o ${PROG} ${OBJS}
 
 .PHONY:		all clean test test-real test-single

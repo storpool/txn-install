@@ -31,7 +31,7 @@ use warnings;
 use Test::More;
 use Test::Command;
 
-my $prog = $ENV{TEST_PROG} // './txn-install';
+my $prog = $ENV{TEST_PROG} // './txn';
 
 my $version_line;
 my @usage_lines;
@@ -63,7 +63,7 @@ subtest 'Version output with -V' => sub {
 	$c->stderr_is_eq('', '-V did not output any errors');
 	my @lines = split /\n/, $c->stdout_value, -1;
 	BAIL_OUT('Unexpected number of lines in the -V output') unless @lines == 2;
-	BAIL_OUT('Unexpected -V line') unless $lines[0] =~ /^ txn-install \s \S+ $/x;
+	BAIL_OUT('Unexpected -V line') unless $lines[0] =~ /^ txn \s \S+ $/x;
 	$version_line = $lines[0];
 };
 
@@ -74,7 +74,7 @@ subtest 'Usage output with -h' => sub {
 	$c->stderr_is_eq('', '-h did not output any errors');
 	my @lines = split /\n/, $c->stdout_value;
 	BAIL_OUT('Too few lines in the -h output') unless @lines > 1;
-	BAIL_OUT('Unexpected -h first line') unless $lines[0] =~ /^ Usage: \s+ txn-install /x;
+	BAIL_OUT('Unexpected -h first line') unless $lines[0] =~ /^ Usage: \s+ txn /x;
 	@usage_lines = @lines;
 };
 

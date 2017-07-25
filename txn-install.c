@@ -77,6 +77,7 @@ static const char * const index_action_names[] = {
 	"create",
 	"patch",
 };
+#define INDEX_ACTION_COUNT	(sizeof(index_action_names) / sizeof(index_action_names[0]))
 
 struct index_line {
 	bool			read_any;
@@ -304,10 +305,59 @@ read_next_index_line(FILE * const fp, const char * const db_idx, struct index_li
 				module[mlen - 1] = ch;
 			}
 		}
-		errx(1, "FIXME: go on with module '%s' at line index %zu", module, idx);
 	}
 
-	errx(1, "FIXME: read the action from %s, got line index %zu and modlule %s", db_idx, idx, module);
+	/* Read the action name. */
+	enum index_action act = act;
+	{
+		char *action;
+		size_t alen, aall;
+		FLEXARR_INIT(action, alen, aall);
+		while (true) {
+			const int ch = fgetc(fp);
+			if (ch == EOF) {
+				if (ferror(fp))
+					err(1, "Could not read an action name from '%s'", db_idx);
+				else
+					errx(1, "Invalid database index '%s': no space after the action name at %zu", db_idx, idx);
+			} else if (ch == ' ') {
+				FLEXARR_ALLOC(action, 1, alen, aall);
+				action[alen - 1] = '\0';
+				break;
+			} else if (!((ch >= 'A' && ch <= 'Z') || (ch >= 'a' && ch <= 'z') || (ch >= '0' && ch <= '9') || (ch == '-'))) {
+				errx(1, "Invalid database index '%s': invalid character '%c' in the action name at %zu", db_idx, ch, idx);
+			} else {
+				FLEXARR_ALLOC(action, 1, alen, aall);
+				action[alen - 1] = ch;
+			}
+		}
+
+		bool found;
+		for (size_t i = 0; i < INDEX_ACTION_COUNT; i++) {
+			if (strcmp(action, index_action_names[i]) == 0) {
+				act = i;
+				found = true;
+				break;
+			}
+		}
+		if (!found)
+			errx(1, "Invalid database index '%s': invalid action name '%s' at %zu", db_idx, action, idx);
+	}
+
+	char *filename = NULL;
+	{
+		size_t len = 0;
+		if (getline(&filename, &len, fp) == -1)
+			errx(1, "Invalid database index '%s': no filename at %zu", db_idx, idx);
+	}
+
+	*ln = (struct index_line){
+		.read_any = true,
+		.idx = idx,
+		.module = module,
+		.action = act,
+		.filename = filename,
+	};
 }
 
 static int
@@ -318,22 +368,30 @@ cmd_list_modules(const int argc, char * const argv[] __unused)
 
 	const struct txn_db db = open_db();
 	struct index_line ln = INDEX_LINE_INIT;
-	char **modules;
+	const char **modules;
 	size_t mlen, mall;
 	FLEXARR_INIT(modules, mlen, mall);
 	while (true) {
 		read_next_index_line(db.file, db.idx, &ln);
 		if (ln.module == NULL)
 			break;
-		warnx("FIXME: process module %s", ln.module);
+		bool found = false;
+		for (size_t i = 0; i < mlen; i++)
+			if (strcmp(modules[i], ln.module) == 0) {
+				found = true;
+				break;
+			}
+
+		if (!found) {
+			FLEXARR_ALLOC(modules, 1, mlen, mall);
+			modules[mlen - 1] = ln.module;
+		}
 	}
 	if (fclose(db.file) == EOF)
 		err(1, "Could not close the database index '%s'", db.idx);
 
-	for (size_t i = 0; i < mlen; i++) {
+	for (size_t i = 0; i < mlen; i++)
 		puts(modules[i]);
-		free(modules[i]);
-	}
 	FLEXARR_FREE(modules, mall);
 	return (0);
 }

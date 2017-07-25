@@ -124,7 +124,7 @@ for my $cmd_in_filename_value (0, 1) {
 	$cmd_in_filename = $cmd_in_filename_value;
 	my $test_name = ($cmd_in_filename ? '' : 'no ').'cmd in filename';
 	subtest $test_name => sub {
-		plan tests => 7;
+		plan tests => 8;
 
 		my $tempdir = tempdir(CLEANUP => 1);
 		$tempd = path($tempdir);
@@ -225,6 +225,15 @@ for my $cmd_in_filename_value (0, 1) {
 			ok all_exist(1), 'install/patch created a second entry';
 			index_add_line(\@index_contents, "something patch $tgt");
 			is_deeply [split_index], \@index_contents, 'install/patch updated the index';
+		};
+
+		subtest 'A wild module appears' => sub {
+			plan tests => 6;
+			my @lines = get_ok_output([prog('list-modules')], 'list-modules with an empty database');
+			is_deeply \@lines, ['something'], 'list-modules returned the single module name';
+			ok none_exist(0), 'list-modules did not create a first entry';
+			ok all_exist(1), 'list-modules did not remove the second entry';
+			is_deeply [split_index], \@index_contents, 'list-modules did not modify the database';
 		};
 	};
 }

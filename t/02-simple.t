@@ -57,7 +57,7 @@ sub get_error_output($ $) {
 	split /\n/, $c->stderr_value
 }
 
-my ($cmd_in_filename, $tempd, $dbdir);
+my ($cmd_in_filename, $tempd, $dbdir, $dbidx);
 
 sub prog($)
 {
@@ -94,6 +94,30 @@ sub all_exist(@)
 	return 1;
 }
 
+sub split_index(@)
+{
+	my @contents = split /\n/, $dbidx->slurp_utf8, -1;
+	BAIL_OUT("Invalid empty database index $dbidx") unless @contents;
+	my $last = pop @contents;
+	BAIL_OUT("Invalid database index $dbidx: no EOL at EOF") unless $last eq '';
+	return @contents;
+}
+
+sub index_add_line($ $)
+{
+	my ($contents, $line) = @_;
+
+	my $last = pop @{$contents};
+
+	my $next = $last;
+	$next =~ s/^0*//;
+	$next = 0 if $next eq "";
+	$next = sprintf("%06d", $next + 1);
+
+	$last .= " $line";
+	push @{$contents}, $last, $next;
+}
+
 plan tests => 2;
 
 for my $cmd_in_filename_value (0, 1) {
@@ -106,8 +130,9 @@ for my $cmd_in_filename_value (0, 1) {
 		$tempd = path($tempdir);
 		my $data = $tempd->child('data');
 		$dbdir = $tempd->child('db');
-		my $dbidx = $dbdir->child('txn.index');
+		$dbidx = $dbdir->child('txn.index');
 		my $last_entry = 1;
+		my @index_contents = ('000000');
 
 		$data->mkpath({ mode => 0755 });
 		$dbdir->mkpath({ mode => 0755 });
@@ -127,7 +152,7 @@ for my $cmd_in_filename_value (0, 1) {
 			is scalar @lines, 0, 'db-init did not return any output';
 			ok -f $dbidx, 'db-init created a database';
 			ok none_exist(0..$last_entry), 'db-init did not create any entries';
-			is $dbidx->slurp_utf8, "000000\n", 'db-init created an empty database';
+			is_deeply [split_index], \@index_contents, 'db-init created an empty database';
 		};
 
 		subtest 'Do not reinitialize a database' => sub {
@@ -136,7 +161,7 @@ for my $cmd_in_filename_value (0, 1) {
 			is scalar @lines, 1, 'db-init with a database returned a single error message';
 			ok -f $dbidx, 'db-init did not remove the database';
 			ok none_exist(0..$last_entry), 'db-init did not create any entries';
-			is $dbidx->slurp_utf8, "000000\n", 'db-init did not modify the database';
+			is_deeply [split_index], \@index_contents, 'db-index did not modify the database';
 		};
 
 		subtest 'No modules in an empty database' => sub {
@@ -145,7 +170,7 @@ for my $cmd_in_filename_value (0, 1) {
 			is scalar @lines, 0, 'list-modules returned nothing on an empty database';
 			ok -f $dbidx, 'list-modules did not remove the database';
 			ok none_exist(0..$last_entry), 'list-modules did not create any entries';
-			is $dbidx->slurp_utf8, "000000\n", 'list-modules did not modify the database';
+			is_deeply [split_index], \@index_contents, 'list-modules did not modify the database';
 		};
 
 		subtest 'Fail to install a nonexistent file' => sub {
@@ -158,7 +183,7 @@ for my $cmd_in_filename_value (0, 1) {
 			ok ! -e $data->child('target'), 'install nonexistent did not create the target';
 
 			ok none_exist(0..$last_entry), 'install nonexistent did not create any entries';
-			is $dbidx->slurp_utf8, "000000\n", 'install nonexistent did not modify the database';
+			is_deeply [split_index], \@index_contents, 'install nonexistent did not modify the database';
 		};
 
 		subtest 'Install something' => sub {
@@ -177,7 +202,8 @@ for my $cmd_in_filename_value (0, 1) {
 			ok -f $tgt, 'install/create created the target file';
 
 			ok none_exist(0..$last_entry), 'install/create did not create any entries';
-			is $dbidx->slurp_utf8, "000000 something create $tgt\n000001\n";
+			index_add_line(\@index_contents, "something create $tgt");
+			is_deeply [split_index], \@index_contents, 'install/create updated the index';
 		};
 
 		subtest 'Now modify the installed something' => sub {
@@ -197,7 +223,8 @@ for my $cmd_in_filename_value (0, 1) {
 
 			ok none_exist(0), 'install/patch did not create a first entry';
 			ok all_exist(1), 'install/patch created a second entry';
-			is $dbidx->slurp_utf8, "000000 something create $tgt\n000001 something patch $tgt\n000002\n";
+			index_add_line(\@index_contents, "something patch $tgt");
+			is_deeply [split_index], \@index_contents, 'install/patch updated the index';
 		};
 	};
 }

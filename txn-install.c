@@ -58,6 +58,14 @@
 #endif
 #endif
 
+#ifndef __dead2
+#if defined(__GNUC__) && __GNUC__ >= 2
+#define __dead2	__attribute__((noreturn))
+#else
+#define __dead2
+#endif
+#endif
+
 #include "flexarr.h"
 
 enum index_action {
@@ -92,7 +100,7 @@ struct txn_db {
 
 static bool		verbose;
 
-static void
+static void __dead2
 usage(const bool _ferr)
 {
 	const char * const s =
@@ -105,8 +113,7 @@ usage(const bool _ferr)
 	    "\t-v\tverbose operation; display diagnostic output\n";
 
 	fprintf(_ferr? stderr: stdout, "%s", s);
-	if (_ferr)
-		exit(1);
+	exit(_ferr ? 1 : 0);
 }
 
 static void
@@ -550,9 +557,29 @@ const struct {
 };
 #define NUM_CMDS (sizeof(cmds) / sizeof(cmds[0]))
 
+static int
+run_command(const char * const cmd, const int argc, char * const argv[])
+{
+	for (size_t i = 0; i < NUM_CMDS; i++)
+		if (strcmp(cmd, cmds[i].name) == 0)
+			return cmds[i].func(argc, argv);
+	warnx("Invalid command '%s'", cmd);
+	usage(true);
+	/* NOTREACHED */
+}
+
 int
 main(const int argc, char * const argv[])
 {
+	{
+		const char * const slash = strrchr(argv[0], '/');
+		const char * const fname = slash != NULL ? slash + 1 : argv[0];
+		if (strncmp(fname, "txn-", 4) == 0) {
+			const char * const cmd = fname + 4;
+			return (run_command(cmd, argc, argv));
+		}
+	}
+
 	bool hflag = false, Vflag = false;
 	int ch;
 	while (ch = getopt(argc, argv, "+hVv-:"), ch != -1)
@@ -596,11 +623,5 @@ main(const int argc, char * const argv[])
 
 	if (pos_argc < 1)
 		usage(true);
-	const char * const cmd = pos_argv[0];
-	for (size_t i = 0; i < NUM_CMDS; i++)
-		if (strcmp(cmd, cmds[i].name) == 0)
-			return cmds[i].func(pos_argc, pos_argv);
-	warnx("Invalid command '%s'", cmd);
-	usage(true);
-	/* NOTREACHED */
+	return (run_command(pos_argv[0], pos_argc, pos_argv));
 }

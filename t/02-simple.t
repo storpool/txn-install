@@ -71,7 +71,7 @@ $ENV{'TXN_INSTALL_DB'} = $dbdir;
 
 subtest 'Error out without a database' => sub {
 	plan tests => 5;
-	my @lines = get_error_output([$prog, '-X', 'list-modules'], 'list-modules without a database');
+	my @lines = get_error_output([$prog, 'list-modules'], 'list-modules without a database');
 	is scalar @lines, 1, 'list-modules without a database returned a single error message';
 	ok ! -f $dbidx, 'list-modules did not create a database by itself';
 	ok ! -f $dbfirst, 'list-modules did not create a first entry by itself';
@@ -79,7 +79,7 @@ subtest 'Error out without a database' => sub {
 
 subtest 'Initialize a database' => sub {
 	plan tests => 6;
-	my @lines = get_ok_output([$prog, '-X', 'db-init'], 'db-init');
+	my @lines = get_ok_output([$prog, 'db-init'], 'db-init');
 	is scalar @lines, 0, 'db-init did not return any output';
 	ok -f $dbidx, 'db-init created a database';
 	ok ! -f $dbfirst, 'db-init did not create a first entry by itself';
@@ -88,7 +88,7 @@ subtest 'Initialize a database' => sub {
 
 subtest 'Do not reinitialize a database' => sub {
 	plan tests => 6;
-	my @lines = get_error_output([$prog, '-X', 'db-init'], 'db-init with an existing database');
+	my @lines = get_error_output([$prog, 'db-init'], 'db-init with an existing database');
 	is scalar @lines, 1, 'db-init with a database returned a single error message';
 	ok -f $dbidx, 'db-init did not remove the database';
 	ok ! -f $dbfirst, 'db-init did not create a first entry by itself';
@@ -97,7 +97,7 @@ subtest 'Do not reinitialize a database' => sub {
 
 subtest 'No modules in an empty database' => sub {
 	plan tests => 6;
-	my @lines = get_ok_output([$prog, '-X', 'list-modules'], 'list-modules with an empty database');
+	my @lines = get_ok_output([$prog, 'list-modules'], 'list-modules with an empty database');
 	is scalar @lines, 0, 'list-modules returned nothing on an empty database';
 	ok -f $dbidx, 'list-modules did not remove the database';
 	ok ! -f $dbfirst, 'list-modules did not create a first entry by itself';
@@ -108,7 +108,7 @@ subtest 'Fail to install a nonexistent file' => sub {
 	plan tests => 6;
 
 	$ENV{'TXN_INSTALL_MODULE'} = 'something';
-	my @lines = get_error_output([$prog, '-c', '-m', '644', $data->child('nonexistent'), $data->child('target')], 'list-modules with an empty database');
+	my @lines = get_error_output([$prog, 'install', '-c', '-m', '644', $data->child('nonexistent'), $data->child('target')], 'list-modules with an empty database');
 
 	ok ! -e $data->child('nonexistent'), 'install did not create a nonexistent source file';
 	ok ! -e $data->child('target'), 'install nonexistent did not create the target';
@@ -126,7 +126,7 @@ subtest 'Install something' => sub {
 	ok -f $src, 'a simple file was created';
 
 	$ENV{'TXN_INSTALL_MODULE'} = 'something';
-	my @lines = get_ok_output([$prog, '-c', '-m', '644', $src, $tgt], 'install/create with an empty database');
+	my @lines = get_ok_output([$prog, 'install', '-c', '-m', '644', $src, $tgt], 'install/create with an empty database');
 	is scalar @lines, 0, 'install/create did not output anything';
 
 	ok -f $src, 'install/create did not remove the source file';

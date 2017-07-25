@@ -410,6 +410,7 @@ record_install(const char * const src, const char * const orig_dst, const struct
 	}
 
 	/* But is it a text file? */
+	bool is_text;
 	{
 		int fds[2];
 		if (pipe(fds) == -1) {
@@ -458,9 +459,72 @@ record_install(const char * const src, const char * const orig_dst, const struct
 			warnx("Could not parse the output of file(1) on '%s': line starts weirdly: %s", src, fline);
 			return (false);
 		}
-		errx(1, "FIXME: parse the rest of the output of file(1) on '%s': %s", src, fline + srclen + 2);
+
+		const char *p = fline + srclen + 1;
+		is_text = false;
+		while (true) {
+			const char * const ntext = strstr(p + 1, "text");
+			if (ntext == NULL)
+				break;
+			/* Yes, we know there is always a previous character. */
+			if (strchr(" \t", ntext[-1]) != NULL &&
+			    strchr(" \t\n", ntext[4]) != NULL) {
+				is_text = true;
+				break;
+			}
+			p = ntext + 3;
+		}
 	}
-	errx(1, "FIXME: record the installation of %s to %s into %s as %zu", src, dst, db->idx, line_idx);
+
+	if (!is_text) {
+		errx(1, "FIXME: record just another created file");
+	}
+
+	char *patch_filename;
+	if (asprintf(&patch_filename, "%s/txn.%06zu", db->dir, line_idx) < 0) {
+		warn("Could not generate a patch filename for '%s'", dst);
+		return (false);
+	}
+	const int patch_fd = open(patch_filename, O_RDWR | O_CREAT | O_EXCL);
+	if (patch_fd == -1) {
+		warn("Could not create the '%s' patch file for '%s'", patch_filename, dst);
+		return (false);
+	}
+	if (flock(patch_fd, LOCK_EX | LOCK_NB) == -1) {
+		warn("Could not lock the '%s' patch file for '%s'", patch_filename, dst);
+		return (false);
+	}
+	{
+		const pid_t pid = fork();
+		if (pid == -1)
+			err(1, "Could not fork for diff");
+		else if (pid == 0) {
+			if (dup2(patch_fd, 1) == -1)
+				err(1, "Could not reopen the '%s' patch file for '%s' as the standard output", patch_filename, dst);
+			execlp("diff", "diff", "-u", "--", dst, src, NULL);
+			err(1, "Could not run diff");
+		}
+		if (close(patch_fd) == -1) {
+			warn("Could not close the '%s' patch file for '%s'", patch_filename, dst);
+			return (false);
+		}
+
+		int stat;
+		if (waitpid(pid, &stat, 0) == -1) {
+			warn("Could not wait for diff to complete for '%s'", dst);
+			return (false);
+		} else if (!WIFEXITED(stat) || (WEXITSTATUS(stat) != 0 && WEXITSTATUS(stat) != 1)) {
+			warnx("diff failed for '%s' (stat 0x%X", dst, stat);
+			return (false);
+		}
+	}
+
+	return (write_db_entry(db, (struct index_line){
+		.idx = line_idx,
+		.module = db->module,
+		.action = ACT_PATCH,
+		.filename = dst,
+	}));
 }
 
 static bool
@@ -522,6 +586,10 @@ cmd_install(const int argc, char * const argv[])
 	if (fseek(db.file, -(INDEX_NUM_SIZE + 1), SEEK_END) == -1)
 		err(1, "Could not seek almost to the end of the database index '%s'", db.idx);
 	struct index_line ln = INDEX_LINE_INIT;
+	const long fpos = ftell(db.file);
+	if (fpos == -1)
+		err(1, "Could not get the current database index position");
+	ln.read_any = fpos > 0;
 	read_next_index_line(db.file, db.idx, &ln);
 	if (ln.module != NULL)
 		errx(1, "Internal error, the last line of the database index should really be a last one...");

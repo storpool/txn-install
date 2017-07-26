@@ -262,10 +262,6 @@ read_next_index_line(FILE * const fp, const char * const db_idx, struct index_li
 			idx = idx * 10 + (ch - '0');
 		}
 
-		const size_t expected = ln->read_any ? ln->idx + 1 : 0;
-		if (idx != expected)
-			errx(1, "Invalid database index '%s': expected line index %zu, got %zu", db_idx, expected, idx);
-
 		const int ch = fgetc(fp);
 		if (ch == EOF) {
 			if (ferror(fp))

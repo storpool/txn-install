@@ -124,7 +124,7 @@ for my $cmd_in_filename_value (0, 1) {
 	$cmd_in_filename = $cmd_in_filename_value;
 	my $test_name = ($cmd_in_filename ? '' : 'no ').'cmd in filename';
 	subtest $test_name => sub {
-		plan tests => 13;
+		plan tests => 14;
 
 		my $tempdir = tempdir(CLEANUP => 1);
 		$tempd = path($tempdir);
@@ -335,6 +335,34 @@ for my $cmd_in_filename_value (0, 1) {
 			ok none_exist(0, 2, 5..$last_entry), 'remove/nonexistent did not create any entries';
 			ok all_exist(1, 4), 'remove/nonexistent did not remove any existing entries';
 			is_deeply [split_index], \@index_contents, 'remove/nonexistent did not modify the index';
+		};
+
+		subtest 'Abort a failed installation' => sub {
+			if ($> == 0) {
+				plan skip_all => 'Do not know how to do a failed installation as root';
+				return;
+			}
+			plan tests => 11;
+
+			my $src = $data->child('source-3.txt');
+			$src->spew_utf8("Well, *are* you looking at me?\n");
+			my $tgtdir = $data->child('newdir-2');
+			ok $tgtdir->mkpath({ mode => 0755 }) == 1, 'a directory was created';
+			my $tgt = $tgtdir->child('newfile.txt');
+
+			ok -f $src, 'a simple file was created';
+			ok ! -f $tgt, 'a nonexistent file does not exist';
+
+			$ENV{'TXN_INSTALL_MODULE'} = 'noninstall';
+			my @lines = get_error_output([prog('install'), '-o', 'root', $src, $tgt], 'install/inaccessible');
+			ok @lines, 'install/inaccessible output some error messages';
+
+			ok -f $src, 'install/inaccessible did not remove the source file';
+			ok -f $tgt, 'install/inaccessible created the target file before failing';
+
+			ok none_exist(0, 2, 5..$last_entry), 'install/nonexistent did not create any entries';
+			ok all_exist(1, 4), 'install/nonexistent did not remove any existing entries';
+			is_deeply [split_index], \@index_contents, 'install/nonexistent did not modify the index';
 		};
 	};
 }

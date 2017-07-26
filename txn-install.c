@@ -606,7 +606,7 @@ run_install(char * const argv[])
 		warn("Could not wait for install(1) to complete");
 		return (false);
 	} else if (!WIFEXITED(stat) || WEXITSTATUS(stat) != 0) {
-		warn("install(1) failed");
+		warnx("install(1) failed");
 		return (false);
 	}
 	return (true);
@@ -615,7 +615,15 @@ run_install(char * const argv[])
 static void
 rollback_install(const long pos, const struct txn_db * const db, const size_t line_idx)
 {
-	errx(1, "FIXME: roll back an installation at position %ld, index %zu in %s", pos, line_idx, db->idx);
+	if (fseek(db->file, pos, SEEK_SET) == -1)
+		err(1, "Could not rewind the database index '%s'", db->idx);
+	fprintf(db->file, "%06zu\n", line_idx);
+	if (ferror(db->file))
+		err(1, "Could not remove a just-added entry in the database index '%s'", db->idx);
+	if (fflush(db->file) == EOF)
+		err(1, "Could not write out the removal of a just-added entry in the database index '%s'", db->idx);
+	if (ftruncate(fileno(db->file), pos + INDEX_NUM_SIZE + 1) == -1)
+		err(1, "Could not truncate the database index '%s' after removing a just-added entry", db->idx);
 }
 
 static struct index_line

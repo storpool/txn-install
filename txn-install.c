@@ -71,11 +71,13 @@
 enum index_action {
 	ACT_CREATE,
 	ACT_PATCH,
+	ACT_REMOVE,
 };
 
 static const char * const index_action_names[] = {
 	"create",
 	"patch",
+	"remove",
 };
 #define INDEX_ACTION_COUNT	(sizeof(index_action_names) / sizeof(index_action_names[0]))
 
@@ -616,6 +618,25 @@ rollback_install(const long pos, const struct txn_db * const db, const size_t li
 	errx(1, "FIXME: roll back an installation at position %ld, index %zu in %s", pos, line_idx, db->idx);
 }
 
+static struct index_line
+read_last_index(const struct txn_db * const db)
+{
+	if (fseek(db->file, -(INDEX_NUM_SIZE + 1), SEEK_END) == -1)
+		err(1, "Could not seek almost to the end of the database index '%s'", db->idx);
+	struct index_line ln = INDEX_LINE_INIT;
+	const long fpos = ftell(db->file);
+	if (fpos == -1)
+		err(1, "Could not get the current database index position");
+	ln.read_any = fpos > 0;
+	read_next_index_line(db->file, db->idx, &ln);
+	if (ln.module != NULL)
+		errx(1, "Internal error, the last line of the database index should really be a last one...");
+
+	if (fseek(db->file, -(INDEX_NUM_SIZE + 1), SEEK_CUR) == -1)
+		err(1, "Could not seek back in the database index '%s'", db->idx);
+	return (ln);
+}
+
 static int
 cmd_install(const int argc, char * const argv[])
 {
@@ -642,19 +663,7 @@ cmd_install(const int argc, char * const argv[])
 	(void)debug; // FIXME: remove me
 
 	const struct txn_db db = open_or_create_db(true);
-	if (fseek(db.file, -(INDEX_NUM_SIZE + 1), SEEK_END) == -1)
-		err(1, "Could not seek almost to the end of the database index '%s'", db.idx);
-	struct index_line ln = INDEX_LINE_INIT;
-	const long fpos = ftell(db.file);
-	if (fpos == -1)
-		err(1, "Could not get the current database index position");
-	ln.read_any = fpos > 0;
-	read_next_index_line(db.file, db.idx, &ln);
-	if (ln.module != NULL)
-		errx(1, "Internal error, the last line of the database index should really be a last one...");
-
-	if (fseek(db.file, -(INDEX_NUM_SIZE + 1), SEEK_CUR) == -1)
-		err(1, "Could not seek back in the database index '%s'", db.idx);
+	struct index_line ln = read_last_index(&db);
 	const long rollback_pos = ftell(db.file);
 	const size_t rollback_idx = ln.idx;
 
@@ -674,6 +683,102 @@ cmd_install(const int argc, char * const argv[])
 	return (0);
 }
 
+static int
+cmd_remove(const int argc, char * const argv[])
+{
+	if (argc != 2)
+		usage(true);
+
+	const char * const fname = argv[1];
+	struct stat sb;
+	if (stat(fname, &sb) == -1) {
+		if (errno != ENOENT)
+			err(1, "Could not examine '%s'", fname);
+		else
+			errx(1, "Cannot remove '%s' since it does not exist", fname);
+	} else if (!S_ISREG(sb.st_mode)) {
+		errx(1, "Only know how to remove regular files, not '%s'", fname);
+	}
+
+	const struct txn_db db = open_or_create_db(true);
+	struct index_line ln = read_last_index(&db);
+
+	FILE * const fp = fopen(fname, "r");
+	if (fp == NULL)
+		err(1, "Could not open '%s' for reading", fname);
+
+	char *backup_filename;
+	if (asprintf(&backup_filename, "%s/txn.%06zu", db.dir, ln.idx) < 0)
+		err(1, "Could not generate a patch filename for '%s'", fname);
+	const int backup_fd = open(backup_filename, O_RDWR | O_CREAT | O_EXCL);
+	if (backup_fd == -1)
+		err(1, "Could not create the '%s' patch file for '%s'", backup_filename, fname);
+	if (flock(backup_fd, LOCK_EX | LOCK_NB) == -1)
+		err(1, "Could not lock the '%s' patch file for '%s'", backup_filename, fname);
+	FILE * const backup = fdopen(backup_fd, "w");
+	if (backup == NULL) {
+		const int save_errno = errno;
+		close(backup_fd);
+		unlink(backup_filename);
+		errno = save_errno;
+		err(1, "Could not reopen the '%s' patch file for '%s'", backup_filename, fname);
+	}
+
+	{
+		const size_t wr = fwrite(&sb, 1, sizeof(sb), backup);
+		if (wr != sizeof(sb)) {
+			const int save_errno = errno;
+			close(backup_fd);
+			unlink(backup_filename);
+			errno = save_errno;
+
+			if (ferror(backup))
+				err(1, "Could not save the metadata of '%s' to '%s'", fname, backup_filename);
+			else
+				errx(1, "Something went wrong saving the metadata of '%s' to '%s', only wrote %zu of %zu bytes", fname, backup_filename, wr, sizeof(sb));
+		}
+	}
+
+	char buf[8192];
+	size_t n;
+	while (n = fread(buf, 1, sizeof(buf), fp), n > 0) {
+		const size_t wr = fwrite(buf, 1, n, backup);
+		if (wr < n) {
+			const int save_errno = errno;
+			close(backup_fd);
+			unlink(backup_filename);
+			errno = save_errno;
+
+			if (ferror(backup))
+				err(1, "Could not save '%s' to '%s'", fname, backup_filename);
+			else
+				errx(1, "Something went wrong saving '%s' to '%s', only wrote %zu of %zu bytes", fname, backup_filename, wr, n);
+		}
+	}
+	if (ferror(fp)) {
+		const int save_errno = errno;
+		close(backup_fd);
+		unlink(backup_filename);
+		errno = save_errno;
+		err(1, "Could not save '%s' to '%s'", fname, backup_filename);
+	}
+
+	if (unlink(fname) == -1) {
+		const int save_errno = errno;
+		close(backup_fd);
+		unlink(backup_filename);
+		errno = save_errno;
+		err(1, "Could not remove '%s'", fname);
+	}
+
+	return (write_db_entry(&db, (struct index_line){
+		.idx = ln.idx,
+		.module = db.module,
+		.action = ACT_REMOVE,
+		.filename = fname,
+	}) ? 0 : 1);
+}
+
 const struct {
 	const char *name;
 	int (*func)(int argc, char * const argv[]);
@@ -681,6 +786,7 @@ const struct {
 	{"db-init", cmd_db_init},
 	{"install", cmd_install},
 	{"list-modules", cmd_list_modules},
+	{"remove", cmd_remove},
 };
 #define NUM_CMDS (sizeof(cmds) / sizeof(cmds[0]))
 

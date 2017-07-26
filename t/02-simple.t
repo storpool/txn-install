@@ -124,14 +124,14 @@ for my $cmd_in_filename_value (0, 1) {
 	$cmd_in_filename = $cmd_in_filename_value;
 	my $test_name = ($cmd_in_filename ? '' : 'no ').'cmd in filename';
 	subtest $test_name => sub {
-		plan tests => 10;
+		plan tests => 13;
 
 		my $tempdir = tempdir(CLEANUP => 1);
 		$tempd = path($tempdir);
 		my $data = $tempd->child('data');
 		$dbdir = $tempd->child('db');
 		$dbidx = $dbdir->child('txn.index');
-		my $last_entry = 2;
+		my $last_entry = 4;
 		my @index_contents = ('000000');
 
 		$data->mkpath({ mode => 0755 });
@@ -274,6 +274,67 @@ for my $cmd_in_filename_value (0, 1) {
 			ok all_exist(1), 'install/recreate/bin did not remove the second entry';
 			index_add_line(\@index_contents, "shell create $tgt");
 			is_deeply [split_index], \@index_contents, 'install/recreate/bin updated the index';
+		};
+
+		subtest 'Remove a nonexistent file' => sub {
+			plan tests => 8;
+
+			my $tgt = $data->child('nonexistent.txt');
+			ok !$tgt->exists, 'a nonexistent file does not exist';
+
+			$ENV{'TXN_INSTALL_MODULE'} = 'removal';
+			my @lines = get_error_output([prog('remove'), $tgt], 'remove/nonexistent');
+			is scalar @lines, 1, 'remove/nonexistent output a single error message';
+
+			ok !$tgt->exists, 'remove/nonexistent did not create the target file';
+
+			ok none_exist(0, 2..$last_entry), 'remove/nonexistent did not create any entries';
+			ok all_exist(1), 'remove/nonexistent did not remove the second entry';
+			is_deeply [split_index], \@index_contents, 'remove/nonexistent did not modify the index';
+		};
+
+		subtest 'Remove an existing file' => sub {
+			plan tests => 8;
+
+			my $tgt = $data->child('removed.txt');
+			$tgt->spew_utf8("Another test, I guess...\n");
+			ok $tgt->is_file, 'a simple file was created';
+
+			$ENV{'TXN_INSTALL_MODULE'} = 'removal';
+			my @lines = get_ok_output([prog('remove'), $tgt], 'remove');
+			is scalar @lines, 0, 'remove did not output anything';
+
+			ok !$tgt->exists, 'remove removed the target file';
+
+			ok none_exist(0, 2, 3, 5..$last_entry), 'remove/nonexistent did not create any unexpected entries';
+			ok all_exist(1, 4), 'remove/nonexistent created a fourth entry';
+			index_add_line(\@index_contents, "removal remove $tgt");
+			is_deeply [split_index], \@index_contents, 'remove/nonexistent updated the index';
+		};
+
+		subtest 'Abort a failed removal' => sub {
+			plan tests => 11;
+
+			my $tgtdir = $data->child('newdir');
+			ok $tgtdir->mkpath({ mode => 0755 }) == 1, 'a directory was created';
+			my $tgt = $tgtdir->child('newfile.txt');
+			$tgt->spew_utf8("Are you looking at me?\n");
+
+			ok -f $tgt, 'a simple file was created';
+
+			ok $tgtdir->chmod(0), 'the directory was made inaccessible';
+
+			$ENV{'TXN_INSTALL_MODULE'} = 'removal';
+			my @lines = get_error_output([prog('remove'), $tgt], 'remove/inaccessible');
+			is scalar @lines, 1, 'remove/inaccessible output a single error message';
+
+			ok $tgtdir->chmod(0755), 'the directory was made accessible again';
+
+			ok -f $tgt, 'remove/inaccessible did not remove the target file';
+
+			ok none_exist(0, 2, 5..$last_entry), 'remove/nonexistent did not create any entries';
+			ok all_exist(1, 4), 'remove/nonexistent did not remove any existing entries';
+			is_deeply [split_index], \@index_contents, 'remove/nonexistent did not modify the index';
 		};
 	};
 }

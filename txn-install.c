@@ -531,7 +531,12 @@ record_install(const char * const src, const char * const orig_dst, const struct
 	}
 
 	if (!is_text) {
-		errx(1, "FIXME: record just another created file");
+		return (write_db_entry(db, (struct index_line){
+			.idx = line_idx,
+			.module = db->module,
+			.action = ACT_CREATE,
+			.filename = dst,
+		}));
 	}
 
 	char *patch_filename;

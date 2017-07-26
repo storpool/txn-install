@@ -124,14 +124,14 @@ for my $cmd_in_filename_value (0, 1) {
 	$cmd_in_filename = $cmd_in_filename_value;
 	my $test_name = ($cmd_in_filename ? '' : 'no ').'cmd in filename';
 	subtest $test_name => sub {
-		plan tests => 8;
+		plan tests => 10;
 
 		my $tempdir = tempdir(CLEANUP => 1);
 		$tempd = path($tempdir);
 		my $data = $tempd->child('data');
 		$dbdir = $tempd->child('db');
 		$dbidx = $dbdir->child('txn.index');
-		my $last_entry = 1;
+		my $last_entry = 2;
 		my @index_contents = ('000000');
 
 		$data->mkpath({ mode => 0755 });
@@ -234,6 +234,46 @@ for my $cmd_in_filename_value (0, 1) {
 			ok none_exist(0), 'list-modules did not create a first entry';
 			ok all_exist(1), 'list-modules did not remove the second entry';
 			is_deeply [split_index], \@index_contents, 'list-modules did not modify the database';
+		};
+
+		subtest 'Install a binary file' => sub {
+			plan tests => 9;
+
+			my $src = path('/bin/sh');
+			my $tgt = $data->child('target-2.txt');
+			ok -f $src, 'there is a /bin/sh on this system';
+
+			$ENV{'TXN_INSTALL_MODULE'} = 'shell';
+			my @lines = get_ok_output([prog('install'), '-c', '-m', '755', $src, $tgt], 'install/create/bin');
+			is scalar @lines, 0, 'install/create/bin did not output anything';
+
+			ok -f $src, 'install/create/bin did not remove the source file';
+			ok -f $tgt, 'install/create/bin created the target file';
+
+			ok none_exist(0, 2..$last_entry), 'install/create/bin did not create any entries';
+			ok all_exist(1), 'install/create/bin did not remove the second entry';
+			index_add_line(\@index_contents, "shell create $tgt");
+			is_deeply [split_index], \@index_contents, 'install/create/bin updated the index';
+		};
+
+		subtest 'Recreate a binary file' => sub {
+			plan tests => 9;
+
+			my $src = path('/bin/cat');
+			my $tgt = $data->child('target-2.txt');
+			ok -f $src, 'there is a /bin/cat on this system';
+
+			$ENV{'TXN_INSTALL_MODULE'} = 'shell';
+			my @lines = get_ok_output([prog('install'), '-c', '-m', '755', $src, $tgt], 'install/recreate/bin');
+			is scalar @lines, 0, 'install/recreate/bin did not output anything';
+
+			ok -f $src, 'install/recreate/bin did not remove the source file';
+			ok -f $tgt, 'install/recreate/bin created the target file';
+
+			ok none_exist(0, 2..$last_entry), 'install/recreate/bin did not create any entries';
+			ok all_exist(1), 'install/recreate/bin did not remove the second entry';
+			index_add_line(\@index_contents, "shell create $tgt");
+			is_deeply [split_index], \@index_contents, 'install/recreate/bin updated the index';
 		};
 	};
 }

@@ -1,0 +1,6 @@
+Change log for txn-install, the transactional file install tool.
+
+0.1.0	2017/07/29
+	- Initial public release.
+
+Comments: Peter Pentchev <pp@storpool.com>

@@ -101,19 +101,20 @@ struct txn_db {
 #define INDEX_NUM_SIZE	6
 #define INDEX_FIRST	"000000\n"
 
-static bool		verbose;
-
 static void __dead2
 usage(const bool _ferr)
 {
 	const char * const s =
-	    "Usage:\ttxn [-Nv] filename...\n"
+	    "Usage:\ttxn install [-c] [-g group] [-m mode] [-o owner] filename... destination\n"
+	    "\ttxn remove filename\n"
+	    "\n"
+	    "\ttxn db-init\n"
+	    "\ttxn list-modules\n"
+	    "\n"
 	    "\ttxn -V | -h\n"
 	    "\n"
 	    "\t-h\tdisplay program usage information and exit\n"
-	    "\t-N\tno operation mode; display what would have been done\n"
-	    "\t-V\tdisplay program version information and exit\n"
-	    "\t-v\tverbose operation; display diagnostic output\n";
+	    "\t-V\tdisplay program version information and exit\n";
 
 	fprintf(_ferr? stderr: stdout, "%s", s);
 	exit(_ferr ? 1 : 0);
@@ -123,17 +124,6 @@ static void
 version(void)
 {
 	puts("txn 0.1.0.dev1");
-}
-
-static void
-debug(const char * const fmt, ...)
-{
-	va_list v;
-
-	va_start(v, fmt);
-	if (verbose)
-		vfprintf(stderr, fmt, v);
-	va_end(v);
 }
 
 static const char *
@@ -668,8 +658,6 @@ cmd_install(const int argc, char * const argv[])
 	if (pos_argc < 2) // FIXME: handle -d
 		usage(true);
 
-	(void)debug; // FIXME: remove me
-
 	const struct txn_db db = open_or_create_db(true);
 	struct index_line ln = read_last_index(&db);
 	const long rollback_pos = ftell(db.file);
@@ -823,7 +811,7 @@ main(const int argc, char * const argv[])
 
 	bool hflag = false, Vflag = false;
 	int ch;
-	while (ch = getopt(argc, argv, "+hVv-:"), ch != -1)
+	while (ch = getopt(argc, argv, "+hV-:"), ch != -1)
 		switch (ch) {
 			case 'h':
 				hflag = true;
@@ -831,10 +819,6 @@ main(const int argc, char * const argv[])
 
 			case 'V':
 				Vflag = true;
-				break;
-
-			case 'v':
-				verbose = true;
 				break;
 
 			case '-':

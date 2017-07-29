@@ -325,7 +325,7 @@ read_next_index_line(FILE * const fp, const char * const db_idx, struct index_li
 			}
 		}
 
-		bool found;
+		bool found = false;
 		for (size_t i = 0; i < INDEX_ACTION_COUNT; i++) {
 			if (strcmp(action, index_action_names[i]) == 0) {
 				act = i;

@@ -154,7 +154,7 @@ for my $cmd_in_filename_value (0, 1) {
 	$cmd_in_filename = $cmd_in_filename_value;
 	my $test_name = ($cmd_in_filename ? '' : 'no ').'cmd in filename';
 	subtest $test_name => sub {
-		plan tests => 16;
+		plan tests => 17;
 
 		my $tempdir = tempdir(CLEANUP => 1);
 		$tempd = path($tempdir);
@@ -426,6 +426,29 @@ for my $cmd_in_filename_value (0, 1) {
 			ok none_exist(0..2, 5..$last_entry), 'list-modules did not create any entries';
 			ok all_exist(4), 'rollback did not remove any entries';
 			is_deeply [split_index], \@index_contents, 'list-modules did not modify the database';
+		};
+
+		subtest 'Try to remove the same module again' => sub {
+			plan tests => 12;
+
+			my $to_remove = $data->child('target-1.txt');
+			my $to_stay = $data->child('target-2.txt');
+			my $to_stay_removed = $data->child('removed.txt');
+
+			ok ! -f $to_remove, 'the rollback target is not there';
+			ok -f $to_stay, 'the unaffected target is there';
+			ok ! -f $to_stay_removed, 'the removed file is not there';
+
+			my @lines = get_ok_output([prog('rollback'), 'something'], 'roll something back');
+			ok @lines == 0, 'rollback did not output anything';
+
+			ok ! -f $to_remove, 'the rollback target is still not there';
+			ok -f $to_stay, 'the unaffected target is still there';
+			ok ! -f $to_stay_removed, 'the removed file is still not there';
+
+			ok none_exist(0..2, 5..$last_entry), 'rollback did not create any entries';
+			ok all_exist(4), 'rollback did not remove any entries';
+			is_deeply [split_index], \@index_contents, 'rollback did not modify the index';
 		};
 	};
 }

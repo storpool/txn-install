@@ -917,7 +917,11 @@ cmd_rollback(const int argc, char * const argv[])
 				/* Yep, these need to be rolled back. */
 				break;
 
-			/* FIXME: the un-actions should come here */
+			case ACT_UNCREATE:
+			case ACT_UNPATCH:
+			case ACT_UNREMOVE:
+				/* Not a second time... */
+				continue;
 
 			default:
 				errx(1, "Invalid database index: unexpected action '%d' for module '%s'", ln.action, module);

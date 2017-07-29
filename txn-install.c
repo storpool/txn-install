@@ -89,6 +89,11 @@ struct index_line {
 	const char		*filename;
 };
 
+struct rollback_index_line {
+	struct index_line	line;
+	long			fpos;
+};
+
 struct txn_db {
 	const char * const dir;
 	const char * const idx;
@@ -334,9 +339,12 @@ read_next_index_line(FILE * const fp, const char * const db_idx, struct index_li
 
 	char *filename = NULL;
 	{
-		size_t len = 0;
-		if (getline(&filename, &len, fp) == -1)
+		size_t alloc = 0;
+		if (getline(&filename, &alloc, fp) == -1)
 			errx(1, "Invalid database index '%s': no filename at %zu", db_idx, idx);
+		size_t len = strlen(filename);
+		while (len > 0 && (filename[len - 1] == '\r' || filename[len - 1] == '\n'))
+			filename[--len] = '\0';
 	}
 
 	*ln = (struct index_line){
@@ -775,6 +783,175 @@ cmd_remove(const int argc, char * const argv[])
 	}) ? 0 : 1);
 }
 
+static void
+rollback_patch(const struct rollback_index_line * const rb, const struct txn_db * const db)
+{
+	const char * const filename = rb->line.filename;
+	const size_t idx = rb->line.idx;
+
+	char *patch_filename;
+	if (asprintf(&patch_filename, "%s/txn.%06zu", db->dir, idx) < 0)
+		err(1, "Could not allocate memory for the patch filename");
+	const int patch_fd = open(patch_filename, O_RDONLY);
+	if (patch_fd == -1) {
+		if (errno == ENOENT)
+			warn("Could not roll back a patch to '%s': the recorded patch file '%s' is gone", filename, patch_filename);
+		else
+			err(1, "Could not open the recorded patch file '%s' for '%s'", patch_filename, filename);
+	}
+
+	const int orig_fd = open(filename, O_RDONLY);
+	if (orig_fd == -1) {
+		if (errno == ENOENT) {
+			/* The file no longer exists, so let's say we unpatched it. */
+			unlink(patch_filename);
+			return;
+		}
+		err(1, "Could not open '%s' for reading before patching it", filename);
+	}
+	struct stat orig_sb;
+	if (fstat(orig_fd, &orig_sb) == -1)
+		err(1, "Could not examine the attributes of '%s' before patching it", filename);
+
+	FILE * const orig_fp = fdopen(orig_fd, "r");
+	if (orig_fp == NULL)
+		err(1, "Could not reopen '%s' for reading before patching it", filename);
+
+	char *temp_filename;
+	if (asprintf(&temp_filename, "%s.XXXXXX", filename) < 0)
+		err(1, "Could not allocate memory for the patched file template");
+	const int temp_fd = mkstemp(temp_filename);
+	if (temp_fd == -1)
+		err(1, "Could not create a temporary file to patch '%s'", filename);
+	FILE * const temp_fp = fdopen(temp_fd, "w");
+	if (temp_fp == NULL)
+		err(1, "Could not reopen the temporary patch file '%s'", temp_filename);
+
+	char buf[4096];
+	while (true) {
+		const size_t nread = fread(buf, 1, sizeof(buf), orig_fp);
+		if (nread == 0) {
+			if (ferror(orig_fp))
+				err(1, "Could not read from '%s' to copy it for patching", filename);
+			else
+				break;
+		}
+
+		const size_t nwritten = fwrite(buf, 1, nread, temp_fp);
+		if (nwritten < nread)
+			err(1, "Could not copy '%s' to '%s' for patching", filename, temp_filename);
+	}
+	fclose(orig_fp);
+	if (fclose(temp_fp) == EOF)
+		err(1, "Could not copy '%s' to '%s' for patching", filename, temp_filename);
+
+	{
+		const pid_t pid = fork();
+		if (pid == -1) {
+			err(1, "Could not fork for patching '%s'", filename);
+		} else if (pid == 0) {
+			if (dup2(patch_fd, 0) == -1)
+				err(1, "Could not reopen standard input from the recorded patch file '%s' for '%s'", patch_filename, filename);
+			execlp("patch", "patch", "-R", "-s", "--", filename, NULL);
+			err(1, "Could not run 'patch' for '%s'", filename);
+		}
+		close(patch_fd);
+
+		int status;
+		if (waitpid(pid, &status, 0) == -1)
+			err(1, "Could not wait for 'patch' to process '%s'", patch_filename);
+		else if (!WIFEXITED(status))
+			err(1, "Something went wrong with 'patch' for '%s'", patch_filename);
+	}
+
+	unlink(patch_filename);
+
+	free(temp_filename);
+	free(patch_filename);
+}
+
+static int
+cmd_rollback(const int argc, char * const argv[])
+{
+	if (argc != 2)
+		usage(true);
+
+	const char * const module = argv[1];
+	const struct txn_db db = open_or_create_db(true);
+
+	if (fseek(db.file, 0, SEEK_SET) == -1)
+		err(1, "Could not rewind the database index '%s'", db.idx);
+	struct rollback_index_line *lines;
+	size_t lcount, lall;
+	FLEXARR_INIT(lines, lcount, lall);
+	struct index_line ln = INDEX_LINE_INIT;
+	while (true) {
+		const long fpos = ftell(db.file);
+		read_next_index_line(db.file, db.idx, &ln);
+		if (ln.module == NULL)
+			break;
+		if (strcmp(ln.module, module) != 0)
+			continue;
+		switch (ln.action) {
+			case ACT_CREATE:
+			case ACT_PATCH:
+			case ACT_REMOVE:
+				/* Yep, these need to be rolled back. */
+				break;
+
+			/* FIXME: the un-actions should come here */
+
+			default:
+				errx(1, "Invalid database index: unexpected action '%d' for module '%s'", ln.action, module);
+				/* NOTREACHED */
+		}
+
+		FLEXARR_ALLOC(lines, 1, lcount, lall);
+		struct rollback_index_line * const rb = &lines[lcount - 1];
+		rb->line = ln;
+		rb->fpos = fpos;
+	}
+
+	/* Nothing to do? */
+	if (lcount == 0) {
+		fclose(db.file);
+		return (0);
+	}
+
+	for (size_t i = 0; i < lcount; i++) {
+		const struct rollback_index_line * const rb = &lines[lcount - i - 1];
+		const char * const act_name = index_action_names[rb->line.action];
+
+		switch (rb->line.action) {
+			case ACT_PATCH:
+				rollback_patch(rb, &db);
+				break;
+
+			case ACT_CREATE:
+				if (unlink(rb->line.filename) == -1) {
+					if (errno != ENOENT)
+						warn("Could not remove '%s'", rb->line.filename);
+				}
+				break;
+
+			case ACT_REMOVE:
+				warnx("FIXME: roll back a removed file %s idx %zu", rb->line.filename, rb->line.idx);
+				break;
+
+			default:
+				errx(1, "Internal error: should not have tried to roll back a '%s' action", act_name);
+				/* NOTREACHED */
+		}
+
+		if (fseek(db.file, rb->fpos + INDEX_NUM_SIZE + 1 + strlen(rb->line.module) + 1, SEEK_SET) == -1)
+			err(1, "Could not rewind the index to mark an action as undone");
+		if (fprintf(db.file, "un%s ", act_name) != (int)strlen(act_name) + 3)
+			err(1, "Could not mark an action as undone in the index");
+	}
+	
+	return (0);
+}
+
 const struct {
 	const char *name;
 	int (*func)(int argc, char * const argv[]);
@@ -783,6 +960,7 @@ const struct {
 	{"install", cmd_install},
 	{"list-modules", cmd_list_modules},
 	{"remove", cmd_remove},
+	{"rollback", cmd_rollback},
 };
 #define NUM_CMDS (sizeof(cmds) / sizeof(cmds[0]))
 

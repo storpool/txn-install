@@ -118,13 +118,43 @@ sub index_add_line($ $)
 	push @{$contents}, $last, $next;
 }
 
+sub index_roll_module_back($ $)
+{
+	my ($contents, $module) = @_;
+
+	my @new;
+	for my $line (@{$contents}) {
+		my @fields = split / /, $line, 4;
+		if (@fields == 1) {
+			push @new, $line;
+			next;
+		} elsif (@fields != 4) {
+			BAIL_OUT("Rolling back '$line': expected four fiels");
+		}
+		my ($idx, $mod, $action, $fname) = @fields;
+		if ($mod ne $module) {
+			push @new, $line;
+			next;
+		}
+
+		$action = "un$action";
+		if (length($fname) < 2) {
+			BAIL_OUT("Rolling back '$line': filename too short");
+		}
+		$fname = substr($fname, 2);
+		push @new, "$idx $mod $action $fname";
+	}
+
+	@{$contents} = @new;
+}
+
 plan tests => 2;
 
 for my $cmd_in_filename_value (0, 1) {
 	$cmd_in_filename = $cmd_in_filename_value;
 	my $test_name = ($cmd_in_filename ? '' : 'no ').'cmd in filename';
 	subtest $test_name => sub {
-		plan tests => 14;
+		plan tests => 15;
 
 		my $tempdir = tempdir(CLEANUP => 1);
 		$tempd = path($tempdir);
@@ -363,6 +393,30 @@ for my $cmd_in_filename_value (0, 1) {
 			ok none_exist(0, 2, 5..$last_entry), 'install/nonexistent did not create any entries';
 			ok all_exist(1, 4), 'install/nonexistent did not remove any existing entries';
 			is_deeply [split_index], \@index_contents, 'install/nonexistent did not modify the index';
+		};
+
+		subtest 'Roll something back' => sub {
+			plan tests => 12;
+
+			my $to_remove = $data->child('target-1.txt');
+			my $to_stay = $data->child('target-2.txt');
+			my $to_stay_removed = $data->child('removed.txt');
+
+			ok -f $to_remove, 'the rollback target is there';
+			ok -f $to_stay, 'the unaffected target is there';
+			ok ! -f $to_stay_removed, 'the removed file is not there';
+
+			my @lines = get_ok_output([prog('rollback'), 'something'], 'roll something back');
+			ok @lines == 0, 'rollback did not output anything';
+
+			ok ! -f $to_remove, 'the rollback target is no longer there';
+			ok -f $to_stay, 'the unaffected target is still there';
+			ok ! -f $to_stay_removed, 'the removed file is still not there';
+
+			ok none_exist(0..2, 5..$last_entry), 'rollback rolled back the patch entry';
+			ok all_exist(4), 'rollback did not remove any other entries';
+			index_roll_module_back \@index_contents, 'something';
+			is_deeply [split_index], \@index_contents, 'rollback updated the index';
 		};
 	};
 }

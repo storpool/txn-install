@@ -432,6 +432,8 @@ get_destination_filename(const char * const src, const char * const dst)
 	char *full;
 	if (asprintf(&full, "%s%s%s", dst, has_slash ? "" : "/", filename) == -1)
 		err(1, "Could not build a destination pathname");
+	if (strlen(full) < 2)
+		errx(1, "For txn-install's purposes, the destination filename should be at least two characters long");
 	return (full);
 }
 
@@ -712,6 +714,8 @@ cmd_remove(const int argc, char * const argv[])
 		usage(true);
 
 	const char * const fname = argv[1];
+	if (strlen(fname) < 2)
+		errx(1, "For txn-install's purposes, the removed filename should be at least two characters long");
 	struct stat sb;
 	if (stat(fname, &sb) == -1) {
 		if (errno != ENOENT)

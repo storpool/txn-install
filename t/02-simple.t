@@ -154,7 +154,7 @@ for my $cmd_in_filename_value (0, 1) {
 	$cmd_in_filename = $cmd_in_filename_value;
 	my $test_name = ($cmd_in_filename ? '' : 'no ').'cmd in filename';
 	subtest $test_name => sub {
-		plan tests => 15;
+		plan tests => 16;
 
 		my $tempdir = tempdir(CLEANUP => 1);
 		$tempd = path($tempdir);
@@ -417,6 +417,15 @@ for my $cmd_in_filename_value (0, 1) {
 			ok all_exist(4), 'rollback did not remove any other entries';
 			index_roll_module_back \@index_contents, 'something';
 			is_deeply [split_index], \@index_contents, 'rollback updated the index';
+		};
+
+		subtest 'No something, just removal in modules' => sub {
+			plan tests => 6;
+			my @lines = get_ok_output([prog('list-modules')], 'list-modules after rolling back');
+			is_deeply \@lines, ['shell', 'removal'], 'list-modules returned the single module name';
+			ok none_exist(0..2, 5..$last_entry), 'list-modules did not create any entries';
+			ok all_exist(4), 'rollback did not remove any entries';
+			is_deeply [split_index], \@index_contents, 'list-modules did not modify the database';
 		};
 	};
 }

@@ -72,12 +72,20 @@ enum index_action {
 	ACT_CREATE,
 	ACT_PATCH,
 	ACT_REMOVE,
+
+	ACT_UNCREATE,
+	ACT_UNPATCH,
+	ACT_UNREMOVE,
 };
 
 static const char * const index_action_names[] = {
 	"create",
 	"patch",
 	"remove",
+
+	"uncreate",
+	"unpatch",
+	"unremove",
 };
 #define INDEX_ACTION_COUNT	(sizeof(index_action_names) / sizeof(index_action_names[0]))
 
@@ -371,6 +379,16 @@ cmd_list_modules(const int argc, char * const argv[] __unused)
 		read_next_index_line(db.file, db.idx, &ln);
 		if (ln.module == NULL)
 			break;
+		switch (ln.action) {
+			case ACT_UNCREATE:
+			case ACT_UNPATCH:
+			case ACT_UNREMOVE:
+				continue;
+
+			default:
+				break;
+		}
+
 		bool found = false;
 		for (size_t i = 0; i < mlen; i++)
 			if (strcmp(modules[i], ln.module) == 0) {

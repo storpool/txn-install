@@ -1,0 +1,14 @@
+Source: txn-install
+Section: utils
+Priority: optional
+Maintainer: Peter Pentchev <pp@storpool.com>
+Build-Depends: debhelper (>> 10), libtest-command-perl, libpath-tiny-perl
+Standards-Version: 4.0.0
+Testsuite: autopkgtest
+
+Package: txn-install
+Architecture: any
+Depends: ${shlibs:Depends}, ${misc:Depends}, diffutils, file, patch
+Multi-Arch: foreign
+Description: FIXME: something
+ FIXME: something else

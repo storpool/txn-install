@@ -1,0 +1,28 @@
+#!/usr/bin/make -f
+# -*- makefile -*-
+# Debian build rules for txn-install, the transaction file install tool.
+
+# Aim for the top, adapt if anything should break on the buildds.
+DEB_BUILD_MAINT_OPTIONS=	hardening=+all
+export DEB_BUILD_MAINT_OPTIONS
+
+DEB_CFLAGS_MAINT_APPEND=	-pipe -Wall -W -std=c99 -pedantic -Wbad-function-cast \
+		-Wcast-align -Wcast-qual -Wchar-subscripts -Winline \
+		-Wmissing-prototypes -Wnested-externs -Wpointer-arith \
+		-Wredundant-decls -Wshadow -Wstrict-prototypes -Wwrite-strings
+ifneq (,$(filter werror,$(DEB_BUILD_OPTIONS)))
+	DEB_CFLAGS_MAINT_APPEND+=	-Werror
+endif
+export DEB_CFLAGS_MAINT_APPEND
+
+### # Large File Support
+### LFS_CPPFLAGS:=	$(shell getconf LFS_CFLAGS 2>/dev/null || echo "-D_LARGEFILE_SOURCE -D_FILE_OFFSET_BITS=64")
+### LFS_LDFLAGS:=	$(shell getconf LFS_LDFLAGS 2>/dev/null || true)
+### export LFS_CPPFLAGS LFS_LDFLAGS
+
+override_dh_auto_install:
+	dh_auto_install -- DESTDIR=${CURDIR}/debian/txn-install PREFIX=/usr \
+		BINGRP=root
+
+%:
+	dh $@

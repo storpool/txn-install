@@ -120,6 +120,7 @@ usage(const bool _ferr)
 	const char * const s =
 	    "Usage:\ttxn install [-c] [-g group] [-m mode] [-o owner] filename... destination\n"
 	    "\ttxn remove filename\n"
+	    "\ttxn rollback modulename\n"
 	    "\n"
 	    "\ttxn db-init\n"
 	    "\ttxn list-modules\n"
@@ -127,7 +128,10 @@ usage(const bool _ferr)
 	    "\ttxn -V | -h\n"
 	    "\n"
 	    "\t-h\tdisplay program usage information and exit\n"
-	    "\t-V\tdisplay program version information and exit\n";
+	    "\t-V\tdisplay program version information and exit\n"
+	    "\n"
+	    "For the 'install' and 'remove' commands, the TXN_INSTALL_MODULE environment\n"
+	    "variable specifies the module name; if it is unset, 'unknown' is used.\n";
 
 	fprintf(_ferr? stderr: stdout, "%s", s);
 	exit(_ferr ? 1 : 0);

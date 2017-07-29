@@ -154,7 +154,7 @@ for my $cmd_in_filename_value (0, 1) {
 	$cmd_in_filename = $cmd_in_filename_value;
 	my $test_name = ($cmd_in_filename ? '' : 'no ').'cmd in filename';
 	subtest $test_name => sub {
-		plan tests => 17;
+		plan tests => 18;
 
 		my $tempdir = tempdir(CLEANUP => 1);
 		$tempd = path($tempdir);
@@ -448,6 +448,29 @@ for my $cmd_in_filename_value (0, 1) {
 
 			ok none_exist(0..2, 5..$last_entry), 'rollback did not create any entries';
 			ok all_exist(4), 'rollback did not remove any entries';
+			is_deeply [split_index], \@index_contents, 'rollback did not modify the index';
+		};
+
+		subtest 'Roll back a file removal' => sub {
+			plan tests => 11;
+
+			my $to_stay_removed = $data->child('target-1.txt');
+			my $to_stay = $data->child('target-2.txt');
+			my $to_reappear = $data->child('removed.txt');
+
+			ok ! -f $to_stay_removed, 'the removed file is not there';
+			ok -f $to_stay, 'the unaffected target is there';
+			ok ! -f $to_reappear, 'the rollback target is not there';
+
+			my @lines = get_ok_output([prog('rollback'), 'removal'], 'roll a file removal back');
+			ok @lines == 0, 'rollback did not output anything';
+
+			ok ! -f $to_stay_removed, 'the removed file is still not there';
+			ok -f $to_stay, 'the unaffected target is still there';
+			ok -f $to_reappear, 'the rollback target reappeared';
+
+			ok none_exist(0..2, 4..$last_entry), 'rollback removed the file removal entry';
+			index_roll_module_back \@index_contents, 'removal';
 			is_deeply [split_index], \@index_contents, 'rollback did not modify the index';
 		};
 	};

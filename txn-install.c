@@ -812,10 +812,12 @@ rollback_patch(const struct rollback_index_line * const rb, const struct txn_db 
 		err(1, "Could not allocate memory for the patch filename");
 	const int patch_fd = open(patch_filename, O_RDONLY);
 	if (patch_fd == -1) {
-		if (errno == ENOENT)
-			warn("Could not roll back a patch to '%s': the recorded patch file '%s' is gone", filename, patch_filename);
-		else
+		if (errno == ENOENT) {
+			warnx("Could not roll back a patch to '%s': the recorded patch file '%s' is gone", filename, patch_filename);
+			return;
+		} else {
 			err(1, "Could not open the recorded patch file '%s' for '%s'", patch_filename, filename);
+		}
 	}
 
 	const int orig_fd = open(filename, O_RDONLY);
@@ -888,6 +890,119 @@ rollback_patch(const struct rollback_index_line * const rb, const struct txn_db 
 	free(patch_filename);
 }
 
+static void
+rollback_remove(const struct rollback_index_line * const rb, const struct txn_db * const db)
+{
+	const char * const filename = rb->line.filename;
+	const size_t idx = rb->line.idx;
+
+	char *rmv_filename;
+	if (asprintf(&rmv_filename, "%s/txn.%06zu", db->dir, idx) < 0)
+		err(1, "Could not allocate memory for the patch filename");
+	const int rmv_fd = open(rmv_filename, O_RDONLY);
+	if (rmv_fd == -1) {
+		if (errno == ENOENT) {
+			warnx("Could not roll back a removal of '%s': the recorded file '%s' is gone", filename, rmv_filename);
+			return;
+		} else {
+			err(1, "Could not open the recorded removal file '%s' for '%s'", rmv_filename, filename);
+		}
+	}
+
+	{
+		struct stat sb;
+		if (stat(filename, &sb) == 0) {
+			warnx("Could not roll back a removal of '%s': it was recreated in the meantime", filename);
+			unlink(rmv_filename);
+			return;
+		}
+	}
+
+	FILE * const rmv_fp = fdopen(rmv_fd, "r");
+	if (rmv_fp == NULL)
+		err(1, "Could not reopen the recorded removal file '%s' for '%s'", rmv_filename, filename);
+
+	struct stat orig_sb;
+	if (fread(&orig_sb, sizeof(orig_sb), 1, rmv_fp) != 1)
+		err(1, "Could not read the removal metadata from '%s' for '%s'", rmv_filename, filename);
+
+	char *temp_filename;
+	if (asprintf(&temp_filename, "%s.XXXXXX", filename) < 0)
+		err(1, "Could not allocate memory for the recreated file template");
+	const int temp_fd = mkstemp(temp_filename);
+	if (temp_fd == -1)
+		err(1, "Could not create a temporary file to recreate '%s'", filename);
+	FILE * const temp_fp = fdopen(temp_fd, "w");
+	if (temp_fp == NULL) {
+		const int save_errno = errno;
+		unlink(temp_filename);
+		errno = save_errno;
+		err(1, "Could not reopen the temporary recreated file '%s'", temp_filename);
+	}
+
+	char buf[4096];
+	while (true) {
+		const size_t nread = fread(buf, 1, sizeof(buf), rmv_fp);
+		if (nread == 0) {
+			if (ferror(rmv_fp)) {
+				const int save_errno = errno;
+				unlink(temp_filename);
+				errno = save_errno;
+				err(1, "Could not read from '%s' to copy it for recreating", rmv_filename);
+			} else {
+				break;
+			}
+		}
+
+		const size_t nwritten = fwrite(buf, 1, nread, temp_fp);
+		if (nwritten < nread) {
+			const int save_errno = errno;
+			unlink(temp_filename);
+			errno = save_errno;
+			err(1, "Could not copy '%s' to '%s' for recreating", rmv_filename, temp_filename);
+		}
+	}
+	fclose(rmv_fp);
+	if (fclose(temp_fp) == EOF) {
+		const int save_errno = errno;
+		unlink(temp_filename);
+		errno = save_errno;
+		err(1, "Could not copy '%s' to '%s' for recreating", filename, temp_filename);
+	}
+
+	const pid_t pid = fork();
+	if (pid == -1) {
+		const int save_errno = errno;
+		unlink(temp_filename);
+		errno = save_errno;
+		err(1, "Could not fork for recreating '%s'", filename);
+	} else if (pid == 0) {
+		char *owner, *group, *mode;
+		if (asprintf(&owner, "%ld", (long)orig_sb.st_uid) < 0 ||
+		    asprintf(&group, "%ld", (long)orig_sb.st_gid) < 0 ||
+		    asprintf(&mode, "%o", orig_sb.st_mode & 03777) < 0)
+			err(1, "Could not allocate memory for the recreated file's attributes");
+
+		execlp("install", "install", "-c", "-o", owner, "-g", group, "-m", mode, "--", temp_filename, filename);
+		err(1, "Could not execute 'install' to recreate '%s'", filename);
+	}
+
+	int status;
+	const int wait_res = waitpid(pid, &status, 0);
+	const int save_errno = errno;
+	unlink(temp_filename);
+	errno = save_errno;
+	if (wait_res == -1)
+		err(1, "Could not wait for 'install' to finish recreating '%s'", filename);
+	else if (!WIFEXITED(status) || WEXITSTATUS(status) != 0)
+		err(1, "'install' failed to recreate '%s'", filename);
+
+	unlink(rmv_filename);
+
+	free(temp_filename);
+	free(rmv_filename);
+}
+
 static int
 cmd_rollback(const int argc, char * const argv[])
 {
@@ -957,7 +1072,7 @@ cmd_rollback(const int argc, char * const argv[])
 				break;
 
 			case ACT_REMOVE:
-				warnx("FIXME: roll back a removed file %s idx %zu", rb->line.filename, rb->line.idx);
+				rollback_remove(rb, &db);
 				break;
 
 			default:

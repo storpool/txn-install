@@ -140,7 +140,7 @@ usage(const bool _ferr)
 static void
 version(void)
 {
-	puts("txn 0.1.0");
+	puts("txn 0.1.1");
 }
 
 static const char *
@@ -232,7 +232,7 @@ open_or_create_db(const bool may_exist)
 		}
 	}
 
-	const int fd = open(idx, O_CREAT | O_EXCL | O_RDWR);
+	const int fd = open(idx, O_CREAT | O_EXCL | O_RDWR, 0644);
 	if (fd == -1)
 		err(1, "Could not create the database index '%s'", idx);
 	if (!writen(fd, INDEX_FIRST, INDEX_NUM_SIZE + 1))
@@ -568,7 +568,7 @@ record_install(const char * const src, const char * const orig_dst, const struct
 		warn("Could not generate a patch filename for '%s'", dst);
 		return (false);
 	}
-	const int patch_fd = open(patch_filename, O_RDWR | O_CREAT | O_EXCL);
+	const int patch_fd = open(patch_filename, O_RDWR | O_CREAT | O_EXCL, 0600);
 	if (patch_fd == -1) {
 		warn("Could not create the '%s' patch file for '%s'", patch_filename, dst);
 		return (false);
@@ -740,7 +740,7 @@ cmd_remove(const int argc, char * const argv[])
 	char *backup_filename;
 	if (asprintf(&backup_filename, "%s/txn.%06zu", db.dir, ln.idx) < 0)
 		err(1, "Could not generate a patch filename for '%s'", fname);
-	const int backup_fd = open(backup_filename, O_RDWR | O_CREAT | O_EXCL);
+	const int backup_fd = open(backup_filename, O_RDWR | O_CREAT | O_EXCL, 0600);
 	if (backup_fd == -1)
 		err(1, "Could not create the '%s' patch file for '%s'", backup_filename, fname);
 	if (flock(backup_fd, LOCK_EX | LOCK_NB) == -1)
@@ -828,22 +828,9 @@ rollback_patch(const struct rollback_index_line * const rb, const struct txn_db 
 		}
 	}
 
-	const int orig_fd = open(filename, O_RDONLY);
-	if (orig_fd == -1) {
-		if (errno == ENOENT) {
-			/* The file no longer exists, so let's say we unpatched it. */
-			unlink(patch_filename);
-			return;
-		}
-		err(1, "Could not open '%s' for reading before patching it", filename);
-	}
 	struct stat orig_sb;
-	if (fstat(orig_fd, &orig_sb) == -1)
+	if (stat(filename, &orig_sb) == -1)
 		err(1, "Could not examine the attributes of '%s' before patching it", filename);
-
-	FILE * const orig_fp = fdopen(orig_fd, "r");
-	if (orig_fp == NULL)
-		err(1, "Could not reopen '%s' for reading before patching it", filename);
 
 	char *temp_filename;
 	if (asprintf(&temp_filename, "%s.XXXXXX", filename) < 0)
@@ -851,45 +838,61 @@ rollback_patch(const struct rollback_index_line * const rb, const struct txn_db 
 	const int temp_fd = mkstemp(temp_filename);
 	if (temp_fd == -1)
 		err(1, "Could not create a temporary file to patch '%s'", filename);
-	FILE * const temp_fp = fdopen(temp_fd, "w");
-	if (temp_fp == NULL)
-		err(1, "Could not reopen the temporary patch file '%s'", temp_filename);
-
-	char buf[4096];
-	while (true) {
-		const size_t nread = fread(buf, 1, sizeof(buf), orig_fp);
-		if (nread == 0) {
-			if (ferror(orig_fp))
-				err(1, "Could not read from '%s' to copy it for patching", filename);
-			else
-				break;
-		}
-
-		const size_t nwritten = fwrite(buf, 1, nread, temp_fp);
-		if (nwritten < nread)
-			err(1, "Could not copy '%s' to '%s' for patching", filename, temp_filename);
+	struct stat temp_sb;
+	if (fstat(temp_fd, &temp_sb) == -1) {
+		const int save_errno = errno;
+		unlink(temp_filename);
+		errno = save_errno;
+		err(1, "Could not examine the just-created temporary file '%s'", temp_filename);
 	}
-	fclose(orig_fp);
-	if (fclose(temp_fp) == EOF)
-		err(1, "Could not copy '%s' to '%s' for patching", filename, temp_filename);
+	close(temp_fd);
 
 	{
 		const pid_t pid = fork();
 		if (pid == -1) {
+			const int save_errno = errno;
+			unlink(temp_filename);
+			errno = save_errno;
 			err(1, "Could not fork for patching '%s'", filename);
 		} else if (pid == 0) {
 			if (dup2(patch_fd, 0) == -1)
 				err(1, "Could not reopen standard input from the recorded patch file '%s' for '%s'", patch_filename, filename);
-			execlp("patch", "patch", "-R", "-s", "--", filename, NULL);
+			execlp("patch", "patch", "-R", "-f", "-s", "-r", "-", "-o", temp_filename, "--", filename, NULL);
 			err(1, "Could not run 'patch' for '%s'", filename);
 		}
 		close(patch_fd);
 
 		int status;
-		if (waitpid(pid, &status, 0) == -1)
-			err(1, "Could not wait for 'patch' to process '%s'", patch_filename);
-		else if (!WIFEXITED(status))
-			err(1, "Something went wrong with 'patch' for '%s'", patch_filename);
+		if (waitpid(pid, &status, 0) == -1) {
+			const int save_errno = errno;
+			unlink(temp_filename);
+			errno = save_errno;
+			err(1, "Could not wait for 'patch' to process '%s'", temp_filename);
+		} else if (!WIFEXITED(status) || WEXITSTATUS(status) != 0) {
+			unlink(temp_filename);
+			errx(1, "Something went wrong with 'patch' for '%s'", temp_filename);
+		}
+
+		if ((temp_sb.st_uid != orig_sb.st_uid || temp_sb.st_gid != orig_sb.st_gid) &&
+		    chown(temp_filename, orig_sb.st_uid, orig_sb.st_gid) == -1) {
+			const int save_errno = errno;
+			unlink(temp_filename);
+			errno = save_errno;
+			err(1, "Could not set the owner and group of the temporary '%s'", temp_filename);
+		}
+		if ((temp_sb.st_mode & 03777) != (orig_sb.st_mode & 03777) &&
+		    chmod(temp_filename, orig_sb.st_mode & 03777) == -1) {
+			const int save_errno = errno;
+			unlink(temp_filename);
+			errno = save_errno;
+			err(1, "Could not set the permissions mode of the temporary '%s'", temp_filename);
+		}
+		if (rename(temp_filename, filename) == -1) {
+			const int save_errno = errno;
+			unlink(temp_filename);
+			errno = save_errno;
+			err(1, "Could not rename the temporary '%s' to '%s'", temp_filename, filename);
+		}
 	}
 
 	unlink(patch_filename);

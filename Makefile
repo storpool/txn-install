@@ -28,6 +28,10 @@ PROG=		txn
 SRCS=		txn-install.c
 OBJS=		txn-install.o
 
+LOCALBASE?=	/usr/local
+PREFIX?=	${LOCALBASE}
+BINDIR?=	${PREFIX}/bin
+
 RM?=		rm -f
 
 CPPFLAGS_STD?=	-D_POSIX_C_SOURCE=200809L -D_XOPEN_SOURCE=700
@@ -48,7 +52,22 @@ CFLAGS+=	-pipe -Wall -W -std=c99 -pedantic -Wbad-function-cast \
 		-Wmissing-prototypes -Wnested-externs -Wpointer-arith \
 		-Wredundant-decls -Wshadow -Wstrict-prototypes -Wwrite-strings
 
+MKDIR?=		mkdir -p
+INSTALL?=	install
+
+BINOWN?=	root
+BINGRP?=	root
+BINMODE?=	755
+
+STRIP?=		-s
+
+INSTALL_PROGRAM=	${INSTALL} -o ${BINOWN} -g ${BINGRP} -m ${BINMODE} ${STRIP}
+
 all:		${PROG}
+
+install:	all
+		${MKDIR} ${DESTDIR}${BINDIR}
+		${INSTALL_PROGRAM} ${PROG} ${DESTDIR}${BINDIR}/
 
 clean:
 		${RM} ${PROG} ${OBJS}

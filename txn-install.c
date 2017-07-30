@@ -232,7 +232,7 @@ open_or_create_db(const bool may_exist)
 		}
 	}
 
-	const int fd = open(idx, O_CREAT | O_EXCL | O_RDWR);
+	const int fd = open(idx, O_CREAT | O_EXCL | O_RDWR, 0644);
 	if (fd == -1)
 		err(1, "Could not create the database index '%s'", idx);
 	if (!writen(fd, INDEX_FIRST, INDEX_NUM_SIZE + 1))
@@ -568,7 +568,7 @@ record_install(const char * const src, const char * const orig_dst, const struct
 		warn("Could not generate a patch filename for '%s'", dst);
 		return (false);
 	}
-	const int patch_fd = open(patch_filename, O_RDWR | O_CREAT | O_EXCL);
+	const int patch_fd = open(patch_filename, O_RDWR | O_CREAT | O_EXCL, 0600);
 	if (patch_fd == -1) {
 		warn("Could not create the '%s' patch file for '%s'", patch_filename, dst);
 		return (false);
@@ -740,7 +740,7 @@ cmd_remove(const int argc, char * const argv[])
 	char *backup_filename;
 	if (asprintf(&backup_filename, "%s/txn.%06zu", db.dir, ln.idx) < 0)
 		err(1, "Could not generate a patch filename for '%s'", fname);
-	const int backup_fd = open(backup_filename, O_RDWR | O_CREAT | O_EXCL);
+	const int backup_fd = open(backup_filename, O_RDWR | O_CREAT | O_EXCL, 0600);
 	if (backup_fd == -1)
 		err(1, "Could not create the '%s' patch file for '%s'", backup_filename, fname);
 	if (flock(backup_fd, LOCK_EX | LOCK_NB) == -1)

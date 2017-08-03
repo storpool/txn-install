@@ -692,22 +692,31 @@ cmd_install(const int argc, char * const argv[])
 
 	const struct txn_db db = open_or_create_db(true);
 	struct index_line ln = read_last_index(&db);
-	const long rollback_pos = ftell(db.file);
-	const size_t rollback_idx = ln.idx;
+
+	char ** const install_argv = malloc((argc + 1) * sizeof(*install_argv));
+	install_argv[0] = strdup("install");
+	for (int i = 1; i < argc; i++)
+		install_argv[i] = argv[i];
+	install_argv[argc] = NULL;
 
 	const char * const destination = pos_argv[pos_argc - 1];
 	for (int i = 0; i < pos_argc - 1; i++) {
+		const long rollback_pos = ftell(db.file);
+
 		if (!record_install(pos_argv[i], destination, &db, ln.idx)) {
-			rollback_install(rollback_pos, &db, rollback_idx);
+			rollback_install(rollback_pos, &db, ln.idx);
 			return (1);
 		}
+
+		install_argv[argc - 2] = pos_argv[i];
+		if (!run_install(install_argv)) {
+			rollback_install(rollback_pos, &db, ln.idx);
+			return (1);
+		}
+
 		ln.idx++;
 	}
 
-	if (!run_install(argv)) {
-		rollback_install(rollback_pos, &db, rollback_idx);
-		return (1);
-	}
 	return (0);
 }
 

@@ -119,6 +119,7 @@ usage(const bool _ferr)
 {
 	const char * const s =
 	    "Usage:\ttxn install [-c] [-g group] [-m mode] [-o owner] filename... destination\n"
+	    "\ttxn install-exact filename... destination\n"
 	    "\ttxn remove filename\n"
 	    "\ttxn rollback modulename\n"
 	    "\n"
@@ -634,6 +635,26 @@ run_install(char * const argv[])
 	return (true);
 }
 
+static bool
+run_install_exact(char ** const argv)
+{
+	const char * const filename = argv[8];
+	struct stat sb;
+	if (stat(filename, &sb) == -1) {
+		warn("Could not examine '%s'", filename);
+		return (false);
+	}
+
+	if (asprintf(&argv[3], "%d", sb.st_uid) < 0 ||
+	    asprintf(&argv[5], "%d", sb.st_gid) < 0 ||
+	    asprintf(&argv[7], "%o", sb.st_mode & 03777) < 0) {
+		warn("Could not set up an install(1) line for '%s'", filename);
+		return (false);
+	}
+
+	return (run_install(argv));
+}
+
 static void
 rollback_install(const long pos, const struct txn_db * const db, const size_t line_idx)
 {
@@ -668,22 +689,29 @@ read_last_index(const struct txn_db * const db)
 }
 
 static int
-cmd_install(const int argc, char * const argv[])
+do_install(const bool exact, const int argc, char * const argv[])
 {
-	int ch;
-	optind = 0;
-	while (ch = getopt(argc, argv, "cg:m:o:"), ch != -1)
-		switch (ch) {
-			case 'c':
-			case 'g':
-			case 'm':
-			case 'o':
-				break;
+	if (!exact) {
+		int ch;
+		optind = 0;
+		while (ch = getopt(argc, argv, "cg:m:o:"), ch != -1)
+			switch (ch) {
+				case 'c':
+				case 'g':
+				case 'm':
+				case 'o':
+					break;
 
-			default:
-				errx(1, "Unhandled install(1) command-line option");
-				/* NOTREACHED */
-		}
+				default:
+					errx(1, "Unhandled install(1) command-line option");
+					/* NOTREACHED */
+			}
+	} else {
+		/* Still need to run getopt(); what if somebody passed "--"? */
+		optind = 0;
+		if (getopt(argc, argv, "") != -1)
+			errx(1, "install-exact does not expect any option arguments");
+	}
 
 	const int pos_argc = argc - optind;
 	char * const * const pos_argv = argv + optind;
@@ -693,11 +721,26 @@ cmd_install(const int argc, char * const argv[])
 	const struct txn_db db = open_or_create_db(true);
 	struct index_line ln = read_last_index(&db);
 
-	char ** const install_argv = malloc((argc + 1) * sizeof(*install_argv));
+	const size_t install_argc = exact
+		? 10 /* whee, magic numbers! */
+		: argc;
+	char ** const install_argv = malloc((install_argc + 1) * sizeof(*install_argv));
 	install_argv[0] = strdup("install");
-	for (int i = 1; i < argc; i++)
-		install_argv[i] = argv[i];
-	install_argv[argc] = NULL;
+	if (!exact) {
+		for (int i = 1; i < argc; i++)
+			install_argv[i] = argv[i];
+	} else {
+		install_argv[1] = strdup("-c");
+		install_argv[2] = strdup("-o");
+		//install_argv[3] = strdup("root");
+		install_argv[4] = strdup("-g");
+		//install_argv[5] = strdup("wheel");
+		install_argv[6] = strdup("-m");
+		//install_argv[7] = strdup("755");
+		//install_argv[8] = strdup("source");
+		install_argv[9] = argv[argc - 1];
+	}
+	install_argv[install_argc] = NULL;
 
 	const char * const destination = pos_argv[pos_argc - 1];
 	for (int i = 0; i < pos_argc - 1; i++) {
@@ -708,8 +751,11 @@ cmd_install(const int argc, char * const argv[])
 			return (1);
 		}
 
-		install_argv[argc - 2] = pos_argv[i];
-		if (!run_install(install_argv)) {
+		install_argv[install_argc - 2] = pos_argv[i];
+		const bool res = exact
+			? run_install_exact(install_argv)
+			: run_install(install_argv);
+		if (!res) {
 			rollback_install(rollback_pos, &db, ln.idx);
 			return (1);
 		}
@@ -718,6 +764,18 @@ cmd_install(const int argc, char * const argv[])
 	}
 
 	return (0);
+}
+
+static int
+cmd_install(const int argc, char * const argv[])
+{
+	return (do_install(false, argc, argv));
+}
+
+static int
+cmd_install_exact(const int argc, char * const argv[])
+{
+	return (do_install(true, argc, argv));
 }
 
 static int
@@ -1115,6 +1173,7 @@ const struct {
 } cmds[] = {
 	{"db-init", cmd_db_init},
 	{"install", cmd_install},
+	{"install-exact", cmd_install_exact},
 	{"list-modules", cmd_list_modules},
 	{"remove", cmd_remove},
 	{"rollback", cmd_rollback},

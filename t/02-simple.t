@@ -154,7 +154,7 @@ for my $cmd_in_filename_value (0, 1) {
 	$cmd_in_filename = $cmd_in_filename_value;
 	my $test_name = ($cmd_in_filename ? '' : 'no ').'cmd in filename';
 	subtest $test_name => sub {
-		plan tests => 18;
+		plan tests => 20;
 
 		my $tempdir = tempdir(CLEANUP => 1);
 		$tempd = path($tempdir);
@@ -472,6 +472,43 @@ for my $cmd_in_filename_value (0, 1) {
 			ok none_exist(0..$last_entry), 'rollback removed the file removal entry';
 			index_roll_module_back \@index_contents, 'removal';
 			is_deeply [split_index], \@index_contents, 'rollback did not modify the index';
+		};
+
+		subtest 'Fail to install-exact a nonexistent source file' => sub {
+			plan tests => 6;
+
+			$ENV{'TXN_INSTALL_MODULE'} = 'exact';
+			my @lines = get_error_output([prog('install-exact'), $data->child('nonexistent'), $data->child('target')], 'install-exact/nonexistent');
+
+			ok ! -e $data->child('nonexistent'), 'install-exact/nonexistent did not create a nonexistent source file';
+			ok ! -e $data->child('target'), 'install-exact/nonexistent did not create the target';
+
+			ok none_exist(0..$last_entry), 'install-exact/nonexistent did not create any new entries';
+			is_deeply [split_index], \@index_contents, 'install-exact/nonexistent did not modify the database';
+		};
+
+		subtest 'Install something exactly as it is' => sub {
+			plan tests => 11;
+
+			my $src = $data->child('source-1.txt');
+			my $tgt = $data->child('target-1.txt');
+			$src->spew_utf8("This is a test.\n");
+			ok -f $src, 'a simple file was created';
+			ok chmod(0602, $src) == 1, 'the permissions mode of the simple file was set';
+
+			$ENV{'TXN_INSTALL_MODULE'} = 'something';
+			my @lines = get_ok_output([prog('install-exact'), $src, $tgt], 'install-exact/create');
+			is scalar @lines, 0, 'install-exact/create did not output anything';
+
+			ok -f $src, 'install-exact/create did not remove the source file';
+			ok -f $tgt, 'install-exact/create created the target file';
+			my @sbuf = stat $tgt;
+			ok @sbuf, 'install-exact/create actually created the target file';
+			is $sbuf[2] & 03777, 0602, 'install-exact/create set the correct permissions mode';
+
+			ok none_exist(0..$last_entry), 'install-exact/create did not create any entries';
+			index_add_line(\@index_contents, "something create $tgt");
+			is_deeply [split_index], \@index_contents, 'install/create updated the index';
 		};
 	};
 }

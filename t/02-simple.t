@@ -251,7 +251,7 @@ for my $cmd_in_filename_value (0, 1) {
 			ok -f $src, 'install/patch did not remove the source file';
 			ok -f $tgt, 'install/patch created the target file';
 
-			ok none_exist(0), 'install/patch did not create a first entry';
+			ok none_exist(0, 2..$last_entry), 'install/patch did not create a first entry';
 			ok all_exist(1), 'install/patch created a second entry';
 			index_add_line(\@index_contents, "something patch $tgt");
 			is_deeply [split_index], \@index_contents, 'install/patch updated the index';
@@ -261,7 +261,7 @@ for my $cmd_in_filename_value (0, 1) {
 			plan tests => 6;
 			my @lines = get_ok_output([prog('list-modules')], 'list-modules with an empty database');
 			is_deeply \@lines, ['something'], 'list-modules returned the single module name';
-			ok none_exist(0), 'list-modules did not create a first entry';
+			ok none_exist(0, 2..$last_entry), 'list-modules did not create a first entry';
 			ok all_exist(1), 'list-modules did not remove the second entry';
 			is_deeply [split_index], \@index_contents, 'list-modules did not modify the database';
 		};
@@ -362,7 +362,7 @@ for my $cmd_in_filename_value (0, 1) {
 
 			ok -f $tgt, 'remove/inaccessible did not remove the target file';
 
-			ok none_exist(0, 2, 5..$last_entry), 'remove/nonexistent did not create any entries';
+			ok none_exist(0, 2, 3, 5..$last_entry), 'remove/nonexistent did not create any entries';
 			ok all_exist(1, 4), 'remove/nonexistent did not remove any existing entries';
 			is_deeply [split_index], \@index_contents, 'remove/nonexistent did not modify the index';
 		};
@@ -390,7 +390,7 @@ for my $cmd_in_filename_value (0, 1) {
 			ok -f $src, 'install/inaccessible did not remove the source file';
 			ok -f $tgt, 'install/inaccessible created the target file before failing';
 
-			ok none_exist(0, 2, 5..$last_entry), 'install/nonexistent did not create any entries';
+			ok none_exist(0, 2, 3, 5..$last_entry), 'install/nonexistent did not create any entries';
 			ok all_exist(1, 4), 'install/nonexistent did not remove any existing entries';
 			is_deeply [split_index], \@index_contents, 'install/nonexistent did not modify the index';
 		};
@@ -413,7 +413,7 @@ for my $cmd_in_filename_value (0, 1) {
 			ok -f $to_stay, 'the unaffected target is still there';
 			ok ! -f $to_stay_removed, 'the removed file is still not there';
 
-			ok none_exist(0..2, 5..$last_entry), 'rollback rolled back the patch entry';
+			ok none_exist(0..3, 5..$last_entry), 'rollback rolled back the patch entry';
 			ok all_exist(4), 'rollback did not remove any other entries';
 			index_roll_module_back \@index_contents, 'something';
 			is_deeply [split_index], \@index_contents, 'rollback updated the index';
@@ -423,7 +423,7 @@ for my $cmd_in_filename_value (0, 1) {
 			plan tests => 6;
 			my @lines = get_ok_output([prog('list-modules')], 'list-modules after rolling back');
 			is_deeply \@lines, ['shell', 'removal'], 'list-modules returned the single module name';
-			ok none_exist(0..2, 5..$last_entry), 'list-modules did not create any entries';
+			ok none_exist(0..3, 5..$last_entry), 'list-modules did not create any entries';
 			ok all_exist(4), 'rollback did not remove any entries';
 			is_deeply [split_index], \@index_contents, 'list-modules did not modify the database';
 		};
@@ -446,7 +446,7 @@ for my $cmd_in_filename_value (0, 1) {
 			ok -f $to_stay, 'the unaffected target is still there';
 			ok ! -f $to_stay_removed, 'the removed file is still not there';
 
-			ok none_exist(0..2, 5..$last_entry), 'rollback did not create any entries';
+			ok none_exist(0..3, 5..$last_entry), 'rollback did not create any entries';
 			ok all_exist(4), 'rollback did not remove any entries';
 			is_deeply [split_index], \@index_contents, 'rollback did not modify the index';
 		};
@@ -469,7 +469,7 @@ for my $cmd_in_filename_value (0, 1) {
 			ok -f $to_stay, 'the unaffected target is still there';
 			ok -f $to_reappear, 'the rollback target reappeared';
 
-			ok none_exist(0..2, 4..$last_entry), 'rollback removed the file removal entry';
+			ok none_exist(0..$last_entry), 'rollback removed the file removal entry';
 			index_roll_module_back \@index_contents, 'removal';
 			is_deeply [split_index], \@index_contents, 'rollback did not modify the index';
 		};

@@ -488,6 +488,34 @@ record_install(const char * const src, const char * const orig_dst, const struct
 		}));
 	}
 
+	/* Is it the same file? */
+	{
+		const pid_t pid = fork();
+		if (pid == -1) {
+			warn("Could not fork for 'cmp %s %s'", src, dst);
+			return (false);
+		} else if (pid == 0) {
+			execlp("cmp", "cmp", "-s", "--", src, dst, NULL);
+			err(3, "Could not execute 'cmp %s %s'", src, dst);
+		}
+
+		int stat;
+		if (waitpid(pid, &stat, 0) == -1) {
+			warn("Could not wait for 'cmp %s %s'", src, dst);
+			return (false);
+		} else if (!WIFEXITED(stat)) {
+			warnx("'cmp %s %s' did not exit normally", src, dst);
+			return (false);
+		} else if (WEXITSTATUS(stat) == 0) {
+			/* The files are the same; nothing to do! */
+			return (true);
+		} else if (WEXITSTATUS(stat) != 1) {
+			warnx("'cmp %s %s' exited with an unexpected status of %d", src, dst, WEXITSTATUS(stat));
+			return (false);
+		}
+		/* Phew! */
+	}
+
 	/* But is it a text file? */
 	bool is_text;
 	{

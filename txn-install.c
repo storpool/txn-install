@@ -994,7 +994,7 @@ rollback_remove(const struct rollback_index_line * const rb, const struct txn_db
 		    asprintf(&mode, "%o", orig_sb.st_mode & 03777) < 0)
 			err(1, "Could not allocate memory for the recreated file's attributes");
 
-		execlp("install", "install", "-c", "-o", owner, "-g", group, "-m", mode, "--", temp_filename, filename);
+		execlp("install", "install", "-c", "-o", owner, "-g", group, "-m", mode, "--", temp_filename, filename, NULL);
 		err(1, "Could not execute 'install' to recreate '%s'", filename);
 	}
 

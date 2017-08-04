@@ -1,12 +1,12 @@
-txn-install (0.1.1-1~2ubuntu1) xenial; urgency=medium
+txn-install (0.2.0-1~1ubuntu1) xenial; urgency=medium
 
   * Rebuild for Xenial.
   * Drop the debhelper compatibility level to 9.
 
  -- Peter Pentchev <pp@storpool.com>  Sun, 30 Jul 2017 20:34:19 +0300
 
-txn-install (0.1.1-1~2) unstable; urgency=medium
+txn-install (0.2.0-1~1) unstable; urgency=medium
 
   * Initial release.
 
- -- Peter Pentchev <pp@storpool.com>  Sun, 30 Jul 2017 20:29:36 +0300
+ -- Peter Pentchev <pp@storpool.com>  Fri, 04 Aug 2017 16:09:04 +0300

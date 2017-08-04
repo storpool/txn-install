@@ -154,7 +154,7 @@ for my $cmd_in_filename_value (0, 1) {
 	$cmd_in_filename = $cmd_in_filename_value;
 	my $test_name = ($cmd_in_filename ? '' : 'no ').'cmd in filename';
 	subtest $test_name => sub {
-		plan tests => 18;
+		plan tests => 23;
 
 		my $tempdir = tempdir(CLEANUP => 1);
 		$tempd = path($tempdir);
@@ -236,6 +236,24 @@ for my $cmd_in_filename_value (0, 1) {
 			is_deeply [split_index], \@index_contents, 'install/create updated the index';
 		};
 
+		subtest 'Install the same thing' => sub {
+			plan tests => 8;
+
+			my $src = $data->child('source-1.txt');
+			my $tgt = $data->child('target-1.txt');
+			ok -f $src, 'the simple file is still there';
+
+			$ENV{'TXN_INSTALL_MODULE'} = 'something';
+			my @lines = get_ok_output([prog('install'), '-c', '-m', '644', $src, $tgt], 'install/create/same');
+			is scalar @lines, 0, 'install/create/same did not output anything';
+
+			ok -f $src, 'install/create/same did not remove the source file';
+			ok -f $tgt, 'install/create/same created the target file';
+
+			ok none_exist(0..$last_entry), 'install/create did not create any entries';
+			is_deeply [split_index], \@index_contents, 'install/create did not modify the index';
+		};
+
 		subtest 'Now modify the installed something' => sub {
 			plan tests => 9;
 
@@ -251,17 +269,36 @@ for my $cmd_in_filename_value (0, 1) {
 			ok -f $src, 'install/patch did not remove the source file';
 			ok -f $tgt, 'install/patch created the target file';
 
-			ok none_exist(0), 'install/patch did not create a first entry';
+			ok none_exist(0, 2..$last_entry), 'install/patch did not create a first entry';
 			ok all_exist(1), 'install/patch created a second entry';
 			index_add_line(\@index_contents, "something patch $tgt");
 			is_deeply [split_index], \@index_contents, 'install/patch updated the index';
+		};
+
+		subtest 'Now install the same thing again' => sub {
+			plan tests => 9;
+
+			my $src = $data->child('source-1.txt');
+			my $tgt = $data->child('target-1.txt');
+			ok -f $src, 'the simple file is still there';
+
+			$ENV{'TXN_INSTALL_MODULE'} = 'something';
+			my @lines = get_ok_output([prog('install'), '-c', '-m', '644', $src, $tgt], 'install/same');
+			is scalar @lines, 0, 'install/same did not output anything';
+
+			ok -f $src, 'install/same did not remove the source file';
+			ok -f $tgt, 'install/same created the target file';
+
+			ok none_exist(0, 2..$last_entry), 'install/same did not create any more entries';
+			ok all_exist(1), 'install/same did not remove any entries';
+			is_deeply [split_index], \@index_contents, 'install/same did not modify the index';
 		};
 
 		subtest 'A wild module appears' => sub {
 			plan tests => 6;
 			my @lines = get_ok_output([prog('list-modules')], 'list-modules with an empty database');
 			is_deeply \@lines, ['something'], 'list-modules returned the single module name';
-			ok none_exist(0), 'list-modules did not create a first entry';
+			ok none_exist(0, 2..$last_entry), 'list-modules did not create a first entry';
 			ok all_exist(1), 'list-modules did not remove the second entry';
 			is_deeply [split_index], \@index_contents, 'list-modules did not modify the database';
 		};
@@ -362,7 +399,7 @@ for my $cmd_in_filename_value (0, 1) {
 
 			ok -f $tgt, 'remove/inaccessible did not remove the target file';
 
-			ok none_exist(0, 2, 5..$last_entry), 'remove/nonexistent did not create any entries';
+			ok none_exist(0, 2, 3, 5..$last_entry), 'remove/nonexistent did not create any entries';
 			ok all_exist(1, 4), 'remove/nonexistent did not remove any existing entries';
 			is_deeply [split_index], \@index_contents, 'remove/nonexistent did not modify the index';
 		};
@@ -390,7 +427,7 @@ for my $cmd_in_filename_value (0, 1) {
 			ok -f $src, 'install/inaccessible did not remove the source file';
 			ok -f $tgt, 'install/inaccessible created the target file before failing';
 
-			ok none_exist(0, 2, 5..$last_entry), 'install/nonexistent did not create any entries';
+			ok none_exist(0, 2, 3, 5..$last_entry), 'install/nonexistent did not create any entries';
 			ok all_exist(1, 4), 'install/nonexistent did not remove any existing entries';
 			is_deeply [split_index], \@index_contents, 'install/nonexistent did not modify the index';
 		};
@@ -413,7 +450,7 @@ for my $cmd_in_filename_value (0, 1) {
 			ok -f $to_stay, 'the unaffected target is still there';
 			ok ! -f $to_stay_removed, 'the removed file is still not there';
 
-			ok none_exist(0..2, 5..$last_entry), 'rollback rolled back the patch entry';
+			ok none_exist(0..3, 5..$last_entry), 'rollback rolled back the patch entry';
 			ok all_exist(4), 'rollback did not remove any other entries';
 			index_roll_module_back \@index_contents, 'something';
 			is_deeply [split_index], \@index_contents, 'rollback updated the index';
@@ -423,7 +460,7 @@ for my $cmd_in_filename_value (0, 1) {
 			plan tests => 6;
 			my @lines = get_ok_output([prog('list-modules')], 'list-modules after rolling back');
 			is_deeply \@lines, ['shell', 'removal'], 'list-modules returned the single module name';
-			ok none_exist(0..2, 5..$last_entry), 'list-modules did not create any entries';
+			ok none_exist(0..3, 5..$last_entry), 'list-modules did not create any entries';
 			ok all_exist(4), 'rollback did not remove any entries';
 			is_deeply [split_index], \@index_contents, 'list-modules did not modify the database';
 		};
@@ -446,7 +483,7 @@ for my $cmd_in_filename_value (0, 1) {
 			ok -f $to_stay, 'the unaffected target is still there';
 			ok ! -f $to_stay_removed, 'the removed file is still not there';
 
-			ok none_exist(0..2, 5..$last_entry), 'rollback did not create any entries';
+			ok none_exist(0..3, 5..$last_entry), 'rollback did not create any entries';
 			ok all_exist(4), 'rollback did not remove any entries';
 			is_deeply [split_index], \@index_contents, 'rollback did not modify the index';
 		};
@@ -469,9 +506,69 @@ for my $cmd_in_filename_value (0, 1) {
 			ok -f $to_stay, 'the unaffected target is still there';
 			ok -f $to_reappear, 'the rollback target reappeared';
 
-			ok none_exist(0..2, 4..$last_entry), 'rollback removed the file removal entry';
+			ok none_exist(0..$last_entry), 'rollback removed the file removal entry';
 			index_roll_module_back \@index_contents, 'removal';
 			is_deeply [split_index], \@index_contents, 'rollback did not modify the index';
+		};
+
+		subtest 'Fail to install-exact a nonexistent source file' => sub {
+			plan tests => 6;
+
+			$ENV{'TXN_INSTALL_MODULE'} = 'exact';
+			my @lines = get_error_output([prog('install-exact'), $data->child('nonexistent'), $data->child('target')], 'install-exact/nonexistent');
+
+			ok ! -e $data->child('nonexistent'), 'install-exact/nonexistent did not create a nonexistent source file';
+			ok ! -e $data->child('target'), 'install-exact/nonexistent did not create the target';
+
+			ok none_exist(0..$last_entry), 'install-exact/nonexistent did not create any new entries';
+			is_deeply [split_index], \@index_contents, 'install-exact/nonexistent did not modify the database';
+		};
+
+		subtest 'Install something exactly as it is' => sub {
+			plan tests => 11;
+
+			my $src = $data->child('source-1.txt');
+			my $tgt = $data->child('target-1.txt');
+			$src->spew_utf8("This is a test.\n");
+			ok -f $src, 'a simple file was created';
+			ok chmod(0602, $src) == 1, 'the permissions mode of the simple file was set';
+
+			$ENV{'TXN_INSTALL_MODULE'} = 'something';
+			my @lines = get_ok_output([prog('install-exact'), $src, $tgt], 'install-exact/create');
+			is scalar @lines, 0, 'install-exact/create did not output anything';
+
+			ok -f $src, 'install-exact/create did not remove the source file';
+			ok -f $tgt, 'install-exact/create created the target file';
+			my @sbuf = stat $tgt;
+			ok @sbuf, 'install-exact/create actually created the target file';
+			is $sbuf[2] & 03777, 0602, 'install-exact/create set the correct permissions mode';
+
+			ok none_exist(0..$last_entry), 'install-exact/create did not create any entries';
+			index_add_line(\@index_contents, "something create $tgt");
+			is_deeply [split_index], \@index_contents, 'install-exact/create updated the index';
+		};
+
+		subtest 'Install the same thing with no index update' => sub {
+			plan tests => 11;
+
+			my $src = $data->child('source-1.txt');
+			my $tgt = $data->child('target-1.txt');
+			$src->spew_utf8("This is a test.\n");
+			ok -f $src, 'a simple file was created';
+			ok chmod(0704, $src) == 1, 'the permissions mode of the simple file was set';
+
+			$ENV{'TXN_INSTALL_MODULE'} = 'something';
+			my @lines = get_ok_output([prog('install-exact'), $src, $tgt], 'install-exact/same');
+			is scalar @lines, 0, 'install-exact/same did not output anything';
+
+			ok -f $src, 'install-exact/same did not remove the source file';
+			ok -f $tgt, 'install-exact/same created the target file';
+			my @sbuf = stat $tgt;
+			ok @sbuf, 'install-exact/same actually created the target file';
+			is $sbuf[2] & 03777, 0704, 'install-exact/same set the correct permissions mode';
+
+			ok none_exist(0..$last_entry), 'install-exact/same did not create any entries';
+			is_deeply [split_index], \@index_contents, 'install-exact/same did not modify the index';
 		};
 	};
 }

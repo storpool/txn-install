@@ -1,5 +1,12 @@
 Change log for txn-install, the transactional file install tool.
 
+0.2.0	2017/08/04
+	- fix a non-null-terminated execlp() call to install(1)
+	- only roll back the last record when installing a file fails
+	- fix some file existence checks in the test
+	- add the "install-exact" command
+	- do not write an index entry when install does not change the file
+
 0.1.1	2017/07/30
 	- add an "install" target
 	- add a mode parameter to open(O_CREAT) calls

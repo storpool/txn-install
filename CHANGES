@@ -1,6 +1,6 @@
 Change log for txn-install, the transactional file install tool.
 
-0.2.0	not yet ;)
+0.2.0	2017/08/04
 	- fix a non-null-terminated execlp() call to install(1)
 	- only roll back the last record when installing a file fails
 	- fix some file existence checks in the test

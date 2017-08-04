@@ -141,7 +141,7 @@ usage(const bool _ferr)
 static void
 version(void)
 {
-	puts("txn 0.2.0.dev1");
+	puts("txn 0.2.0");
 }
 
 static const char *

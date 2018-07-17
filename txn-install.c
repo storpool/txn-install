@@ -1,5 +1,5 @@
 /*-
- * Copyright (c) 2017  Peter Pentchev
+ * Copyright (c) 2017, 2018  Peter Pentchev
  * All rights reserved.
  *
  * Redistribution and use in source and binary forms, with or without
@@ -141,7 +141,7 @@ usage(const bool _ferr)
 static void
 version(void)
 {
-	puts("txn 0.2.0");
+	puts("txn 0.2.1");
 }
 
 static const char *

@@ -1,0 +1,270 @@
+.\" Copyright (c) 2018  Peter Pentchev
+.\" All rights reserved.
+.\"
+.\" Redistribution and use in source and binary forms, with or without
+.\" modification, are permitted provided that the following conditions
+.\" are met:
+.\" 1. Redistributions of source code must retain the above copyright
+.\"    notice, this list of conditions and the following disclaimer.
+.\" 2. Redistributions in binary form must reproduce the above copyright
+.\"    notice, this list of conditions and the following disclaimer in the
+.\"    documentation and/or other materials provided with the distribution.
+.\"
+.\" THIS SOFTWARE IS PROVIDED BY THE AUTHOR AND CONTRIBUTORS ``AS IS'' AND
+.\" ANY EXPRESS OR IMPLIED WARRANTIES, INCLUDING, BUT NOT LIMITED TO, THE
+.\" IMPLIED WARRANTIES OF MERCHANTABILITY AND FITNESS FOR A PARTICULAR PURPOSE
+.\" ARE DISCLAIMED.  IN NO EVENT SHALL THE AUTHOR OR CONTRIBUTORS BE LIABLE
+.\" FOR ANY DIRECT, INDIRECT, INCIDENTAL, SPECIAL, EXEMPLARY, OR CONSEQUENTIAL
+.\" DAMAGES (INCLUDING, BUT NOT LIMITED TO, PROCUREMENT OF SUBSTITUTE GOODS
+.\" OR SERVICES; LOSS OF USE, DATA, OR PROFITS; OR BUSINESS INTERRUPTION)
+.\" HOWEVER CAUSED AND ON ANY THEORY OF LIABILITY, WHETHER IN CONTRACT, STRICT
+.\" LIABILITY, OR TORT (INCLUDING NEGLIGENCE OR OTHERWISE) ARISING IN ANY WAY
+.\" OUT OF THE USE OF THIS SOFTWARE, EVEN IF ADVISED OF THE POSSIBILITY OF
+.\" SUCH DAMAGE.
+.\"
+.Dd July 17, 2018
+.Dt TXN 1
+.Os
+.Sh NAME
+.Nm txn
+.Nd keep a record of files installed and possibly roll them back
+.Sh SYNOPSIS
+.Nm
+.Cm install
+.Op Fl c
+.Op Fl g Ar group
+.Op Fl m Ar mode
+.Op Fl o Ar owner
+.Ar filename...
+.Ar destination
+.Nm
+.Cm install-exact
+.Ar filename...
+.Ar destination
+.Nm
+.Cm remove
+.Ar filename
+.Pp
+.Nm
+.Cm rollback
+.Ar modulename
+.Pp
+.Nm
+.Cm db-init
+.Nm
+.Cm list-modules
+.Pp
+.Nm
+.Op Fl V | Fl -version | Fl h | Fl -help
+.Sh DESCRIPTION
+The
+.Nm
+utility helps automated deployment systems keep track of changes made to
+files and, later, roll those changes back, e.g. when uninstalling
+a module.
+While some of its functionality (keeping track of newly-installed files)
+is similar to that of a package management system, its true goal is to
+record modifications made to e.g. configuration files; most package
+management systems run into problems when different packages try to modify
+the same file.
+The
+.Nm
+utility will use the
+.Xr diff 1
+tool to store a patch into its internal database and, later, when asked
+to roll the change back, will invoke the
+.Xr patch 1
+tool to revert it.
+.Pp
+At each invocation of
+.Nm
+with the
+.Cm install ,
+.Cm install-exact ,
+or
+.Cm remove
+subcommands, the
+.Ev TXN_INSTALL_MODULE
+environment variable must specify a module name.
+The change is stored in the database as performed by this module, and
+may later be reverted using the
+.Cm rollback
+subcommand with the module name specified.
+.Pp
+The
+.Nm
+utility accepts the following command-line options:
+.Bl -tag -width indent
+.It Fl c
+Passed on to
+.Xr install 1 .
+.It Fl g Ar group
+Passed on to
+.Xr install 1 .
+.It Fl h Fl -help
+Display program usage information and exit.
+.It Fl m Ar mode
+Passed on to
+.Xr install 1 .
+.It Fl o Ar owner
+Passed on to
+.Xr install 1 .
+.It Fl V Fl -version
+Display program version information and exit.
+.El
+.Pp
+The
+.Nm
+utility accepts the following commands:
+.Bl -tag -width indent
+.It Cm db-init
+Initialize the
+.Nm
+database; should be performed exactly once after the initial
+installation of
+.Nm
+on the system.
+.It Cm install
+Install a file (or several files) with the specified owner, group, and
+permissions mode, and record this.
+If the destination file exists, record the changes made to it; otherwise,
+record that a new file has been created.
+.It Cm install-exact
+Install a file (or several files) with the owner, group, and permissions
+mode taken from the destination file; the destination file must exist.
+As with
+.Cm install ,
+record the changes made to the destination file.
+.It Cm list-modules
+Go through the database and list the names of modules that have
+performed any
+.Cm install ,
+.Cm install-exact ,
+or
+.Cm remove
+actions (that have not yet been reverted).
+.It Cm remove
+Remove an existing file on the filesystem and record its owner, group,
+permissions mode, and full contents, so that the file may be recreated in
+exactly the same way when rolling back the module installation.
+.It Cm rollback
+Go through the
+.Nm
+database in reverse chronological order, roll back any changes made to
+files by the specified modules, and mark those entries in the database as
+rolled back.
+Newly-created files are removed, removed files are recreated with
+the metadata and contents stored in the database, and changed files are
+modified using an invocation of
+.Xr patch 1
+with the
+.Fl R
+(reverse, revert the changes made by the patch) option.
+.El
+.Pp
+If invoked as
+.Nm txn-install
+or
+.Nm txn-remove ,
+the
+.Nm
+utility will behave as if the first command-line argument has been
+specified as
+.Cm install
+or
+.Cm remove
+respectively.
+This allows
+.Xr install 1
+invocations to be substituted by
+.Nm txn-install
+e.g. with an environment variable passed to
+.Xr make 1
+with no change in the command-line arguments.
+.Pp
+.Sh ENVIRONMENT
+For the
+.Cm install ,
+.Cm install-exact ,
+and
+.Cm remove
+commands, the name of the
+.Dq owner
+module must be specified in the
+.Ev TXN_INSTALL_MODULE
+environment variable.
+It will be recorded in the database for a subsequent
+.Cm rollback .
+.Pp
+If the
+.Ev TXN_INSTALL_DB
+variable is set,
+.Nm
+will use it instead of the default
+.Pa /var/lib/txn
+for the path to the directory containing its database.
+.Sh FILES
+The
+.Nm
+utility keeps its database of changes made to files in the
+.Pa /var/lib/txn
+directory.
+This may be overridden by setting the
+.Ev TXN_INSTALL_DB
+environment variable.
+.Sh EXAMPLES
+Initialize the database once after installing the
+.Nm
+utility:
+.Pp
+.Dl txn db-init
+.Pp
+Record the installation (or modification) of a configuration file:
+.Pp
+.Dl env TXN_INSTALL_MODULE=p1 txn install -c -o root -g root -m 644 /tmp/sources.12131 /etc/apt/sources.list.d/vendor.list
+.Pp
+Record a modification of an existing file, contents only, no metadata change:
+.Pp
+.Dl env TXN_INSTALL_MODULE=p1 txn install-exact /tmp/hosts.32784 /etc/hosts
+.Pp
+Record the removal of an existing file:
+.Pp
+.Dl env TXN_INSTALL_MODULE=p2 txn remove /etc/grub.d/10_linux
+.Pp
+List the modules that have performed changes (after these commands, this would
+output
+.Dq p1
+and
+.Dq p2 ):
+.Pp
+.Dl txn list-modules
+.Pp
+Revert any changes performed by a module, removing all of its entries from
+the
+.Nm
+database:
+.Pp
+.Dl txn rollback p1
+.Pp
+.Sh DIAGNOSTICS
+.Ex -std
+.Sh SEE ALSO
+.Xr diff 1 ,
+.Xr install 1 ,
+.Xr patch 1
+.Sh STANDARDS
+No standards were harmed during the production of the
+.Nm
+utility.
+.Sh HISTORY
+The
+.Nm
+utility was written by Peter Pentchev in 2017 for StorPool
+.Pq https://storpool.com/ .
+.Sh AUTHORS
+.An Peter Pentchev
+.Aq pp@storpool.com
+.Sh BUGS
+No, thank you :)
+But if you should actually find any, please report them
+to the author.

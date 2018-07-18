@@ -5,6 +5,7 @@ Change log for txn-install, the transactional file install tool.
 	  txn-remove.1 links
 	- fix a typo in the 02-simple test
 	- add the --features command-line option
+	- add a Markdown-formatted README.md file
 
 0.2.0	2017/08/04
 	- fix a non-null-terminated execlp() call to install(1)

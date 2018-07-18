@@ -41,7 +41,9 @@ the `txn` database:
 ## Contact
 
 The `txn` utility was written by [Peter Pentchev][roam] for
-[StorPool][storpool].
+[StorPool][storpool].  It is developed in a Git repository at
+[GitHub][github].
 
 [roam]: mailto:pp@storpool.com
 [storpool]: https://storpool.com/
+[github]: https://github.com/storpool/txn-install

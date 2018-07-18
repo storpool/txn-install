@@ -4,6 +4,7 @@ Change log for txn-install, the transactional file install tool.
 	- add the txn.1 manual page and install the txn-install.1 and
 	  txn-remove.1 links
 	- fix a typo in the 02-simple test
+	- add the --features command-line option
 
 0.2.0	2017/08/04
 	- fix a non-null-terminated execlp() call to install(1)

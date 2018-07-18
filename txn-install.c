@@ -68,6 +68,8 @@
 
 #include "flexarr.h"
 
+#define TXN_VERSION	"0.2.1"
+
 enum index_action {
 	ACT_CREATE,
 	ACT_PATCH,
@@ -126,7 +128,7 @@ usage(const bool _ferr)
 	    "\ttxn db-init\n"
 	    "\ttxn list-modules\n"
 	    "\n"
-	    "\ttxn -V | -h\n"
+	    "\ttxn -V | -h | --features\n"
 	    "\n"
 	    "\t-h\tdisplay program usage information and exit\n"
 	    "\t-V\tdisplay program version information and exit\n"
@@ -141,7 +143,13 @@ usage(const bool _ferr)
 static void
 version(void)
 {
-	puts("txn 0.2.1");
+	puts("txn " TXN_VERSION);
+}
+
+static void
+features(void)
+{
+	puts("Features: txn=" TXN_VERSION);
 }
 
 static const char *
@@ -1231,7 +1239,7 @@ main(const int argc, char * const argv[])
 		}
 	}
 
-	bool hflag = false, Vflag = false;
+	bool listfeatures = false, hflag = false, Vflag = false;
 	int ch;
 	while (ch = getopt(argc, argv, "+hV-:"), ch != -1)
 		switch (ch) {
@@ -1244,7 +1252,9 @@ main(const int argc, char * const argv[])
 				break;
 
 			case '-':
-				if (strcmp(optarg, "help") == 0)
+				if (strcmp(optarg, "features") == 0)
+					listfeatures = true;
+				else if (strcmp(optarg, "help") == 0)
 					hflag = true;
 				else if (strcmp(optarg, "version") == 0)
 					Vflag = true;
@@ -1260,9 +1270,11 @@ main(const int argc, char * const argv[])
 		}
 	if (Vflag)
 		version();
+	if (listfeatures)
+		features();
 	if (hflag)
 		usage(false);
-	if (Vflag || hflag)
+	if (Vflag || listfeatures || hflag)
 		return (0);
 
 	const int pos_argc = argc - optind;

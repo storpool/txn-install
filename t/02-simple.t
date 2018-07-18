@@ -129,7 +129,7 @@ sub index_roll_module_back($ $)
 			push @new, $line;
 			next;
 		} elsif (@fields != 4) {
-			BAIL_OUT("Rolling back '$line': expected four fiels");
+			BAIL_OUT("Rolling back '$line': expected four fields");
 		}
 		my ($idx, $mod, $action, $fname) = @fields;
 		if ($mod ne $module) {

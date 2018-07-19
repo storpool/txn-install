@@ -1,6 +1,6 @@
 #!/usr/bin/perl
 #
-# Copyright (c) 2017  Peter Pentchev
+# Copyright (c) 2017, 2018  Peter Pentchev
 # All rights reserved.
 #
 # Redistribution and use in source and binary forms, with or without
@@ -129,7 +129,7 @@ sub index_roll_module_back($ $)
 			push @new, $line;
 			next;
 		} elsif (@fields != 4) {
-			BAIL_OUT("Rolling back '$line': expected four fiels");
+			BAIL_OUT("Rolling back '$line': expected four fields");
 		}
 		my ($idx, $mod, $action, $fname) = @fields;
 		if ($mod ne $module) {

@@ -1,5 +1,12 @@
 Change log for txn-install, the transactional file install tool.
 
+0.2.1	2018/07/19
+	- add the txn.1 manual page and install the txn-install.1 and
+	  txn-remove.1 links
+	- fix a typo in the 02-simple test
+	- add the --features command-line option
+	- add a Markdown-formatted README.md file
+
 0.2.0	2017/08/04
 	- fix a non-null-terminated execlp() call to install(1)
 	- only roll back the last record when installing a file fails

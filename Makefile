@@ -1,6 +1,6 @@
 #!/usr/bin/make -f
 #
-# Copyright (c) 2017  Peter Pentchev
+# Copyright (c) 2017, 2018  Peter Pentchev
 # All rights reserved.
 #
 # Redistribution and use in source and binary forms, with or without
@@ -28,11 +28,18 @@ PROG=		txn
 SRCS=		txn-install.c
 OBJS=		txn-install.o
 
+MAN1=		txn.1
+MAN1GZ=		${MAN1}.gz
+MAN1GZLINKS=	txn-install.1.gz txn-remove.1.gz
+
 LOCALBASE?=	/usr/local
 PREFIX?=	${LOCALBASE}
 BINDIR?=	${PREFIX}/bin
+MANDIR?=	${PREFIX}/man/man
 
 RM?=		rm -f
+LN?=		ln
+LN_S?=		${LN} -s
 
 CPPFLAGS_STD?=	-D_POSIX_C_SOURCE=200809L -D_XOPEN_SOURCE=700
 
@@ -59,18 +66,28 @@ BINOWN?=	root
 BINGRP?=	root
 BINMODE?=	755
 
+SHAREOWN?=	${BINOWN}
+SHAREGRP?=	${BINGRP}
+SHAREMODE?=	644
+
 STRIP?=		-s
 
 INSTALL_PROGRAM=	${INSTALL} -o ${BINOWN} -g ${BINGRP} -m ${BINMODE} ${STRIP}
+INSTALL_DATA?=	${INSTALL} -o ${SHAREOWN} -g ${SHAREGRP} -m ${SHAREMODE}
 
-all:		${PROG}
+all:		${PROG} ${MAN1GZ}
 
 install:	all
 		${MKDIR} ${DESTDIR}${BINDIR}
 		${INSTALL_PROGRAM} ${PROG} ${DESTDIR}${BINDIR}/
+		${MKDIR} ${DESTDIR}${MANDIR}1
+		${INSTALL_DATA} ${MAN1GZ} ${DESTDIR}${MANDIR}1/
+		set -e; for dst in ${MAN1GZLINKS}; do \
+			${LN_S} ${MAN1GZ} ${DESTDIR}${MANDIR}1/$$dst; \
+		done
 
 clean:
-		${RM} ${PROG} ${OBJS}
+		${RM} ${PROG} ${OBJS} ${MAN1GZ}
 
 test-single:	${TEST_PROG}
 		echo "Testing ${TEST_PROG}"
@@ -85,4 +102,8 @@ test:		test-real
 ${PROG}:	${OBJS}
 		${CC} ${LDFLAGS} -o ${PROG} ${OBJS}
 
+${MAN1GZ}:	${MAN1}
+		gzip -c9 -n ${MAN1} > ${MAN1GZ}.tmp || (${RM} ${MAN1GZ}.tmp; exit 1)
+		mv ${MAN1GZ}.tmp ${MAN1GZ} || (${RM} ${MAN1GZ}.tmp; exit 1)
+		
 .PHONY:		all clean test test-real test-single

@@ -1,6 +1,6 @@
 Change log for txn-install, the transactional file install tool.
 
-0.2.1	not yet ;)
+0.2.1	2018/07/19
 	- add the txn.1 manual page and install the txn-install.1 and
 	  txn-remove.1 links
 	- fix a typo in the 02-simple test

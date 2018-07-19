@@ -5,7 +5,7 @@ Source: https://devel.ringlet.net/textproc/confget/
 License: BSD-2-clause
 
 Files: *
-Copyright: Copyright (c) 2017  Peter Pentchev
+Copyright: Copyright (c) 2017, 2018  Peter Pentchev
 License: BSD-2-clause
 
 Files: debian/*

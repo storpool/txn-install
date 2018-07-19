@@ -3,6 +3,8 @@ txn-install (0.2.1-1~1) UNRELEASED; urgency=medium
   * New upstream version, update the upstream copyright years.
   * Fill in some debian/control and debian/upstream/metadata information.
   * Add a watch file and the upstream OpenPGP signing key.
+  * Bring up to compliance with version 4.1.5 of the Debian policy:
+    - drop the redundant "Testsuite: autopkgtest" source control field
 
  -- Peter Pentchev <pp@storpool.com>  Thu, 19 Jul 2018 11:04:53 +0300
 

@@ -2,7 +2,7 @@ Source: txn-install
 Section: utils
 Priority: optional
 Maintainer: Peter Pentchev <pp@storpool.com>
-Build-Depends: debhelper (>> 10), libtest-command-perl, libpath-tiny-perl
+Build-Depends: debhelper (>> 11~), libtest-command-perl, libpath-tiny-perl
 Standards-Version: 4.1.5
 Homepage: https://github.com/storpool/txn-install
 Rules-Requires-Root: no

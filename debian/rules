@@ -22,7 +22,9 @@ export DEB_CFLAGS_MAINT_APPEND
 
 override_dh_auto_install:
 	dh_auto_install -- DESTDIR=${CURDIR}/debian/txn-install PREFIX=/usr \
-		MANDIR=/usr/share/man/man BINGRP=root
+		MANDIR=/usr/share/man/man BINGRP=root \
+		INSTALL_PROGRAM='install -m 755' \
+		INSTALL_DATA='install -m 644'
 
 %:
 	dh $@

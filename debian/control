@@ -5,6 +5,7 @@ Maintainer: Peter Pentchev <pp@storpool.com>
 Build-Depends: debhelper (>> 10), libtest-command-perl, libpath-tiny-perl
 Standards-Version: 4.1.5
 Homepage: https://github.com/storpool/txn-install
+Rules-Requires-Root: no
 
 Package: txn-install
 Architecture: any

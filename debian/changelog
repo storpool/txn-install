@@ -11,7 +11,8 @@ txn-install (0.2.1-1~1) UNRELEASED; urgency=medium
   * Add the Vcs-* source control fields.
   * Drop the dependency on the essential "diffutils" package.
   * Add a trivial autopkgtest running adequate on the installed package.
-  * Bump the debhelper compatibility level to 11 with no changes.
+  * Bump the debhelper compatibility level to 11 with no changes and
+    use the debhelper-compat (= 11) mechanism.
 
  -- Peter Pentchev <pp@storpool.com>  Thu, 19 Jul 2018 11:04:53 +0300
 

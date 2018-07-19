@@ -8,6 +8,7 @@ txn-install (0.2.1-1~1) UNRELEASED; urgency=medium
   * Add "Rules-Requires-Root: no" and override the install(1) invocations,
     thereby also stopping the upstream build system from stripping
     the installed executable file so that a -dbgsym package may be created.
+  * Add the Vcs-* source control fields.
 
  -- Peter Pentchev <pp@storpool.com>  Thu, 19 Jul 2018 11:04:53 +0300
 

@@ -6,6 +6,8 @@ Build-Depends: debhelper (>> 10), libtest-command-perl, libpath-tiny-perl
 Standards-Version: 4.1.5
 Homepage: https://github.com/storpool/txn-install
 Rules-Requires-Root: no
+Vcs-Git: https://github.com/storpool/txn-install.git -b debian
+Vcs-Browser: https://github.com/storpool/txn-install/tree/debian
 
 Package: txn-install
 Architecture: any

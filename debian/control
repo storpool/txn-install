@@ -11,7 +11,7 @@ Vcs-Browser: https://github.com/storpool/txn-install/tree/debian
 
 Package: txn-install
 Architecture: any
-Depends: ${shlibs:Depends}, ${misc:Depends}, diffutils, file, patch
+Depends: ${shlibs:Depends}, ${misc:Depends}, file, patch
 Multi-Arch: foreign
 Description: keep a record of files installed and roll them back
  The `txn` utility helps automated deployment systems keep track of changes

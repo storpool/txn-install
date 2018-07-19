@@ -1,2 +1,5 @@
 Test-Command: env TEST_PROG='/usr/bin/txn' prove -v t
 Depends: @, perl, libtest-command-perl, libpath-tiny-perl
+
+Test-Command: adequate txn-install
+Depends: @, adequate

@@ -1,8 +1,8 @@
-txn-install (0.2.1-1~1ubuntu1) UNRELEASED; urgency=medium
+txn-install (0.2.1-1~1ubuntu1) bionic; urgency=medium
 
   * Rebuild for Bionic.
 
- -- Peter Pentchev <pp@storpool.com>  Thu, 19 Jul 2018 13:53:10 +0300
+ -- Peter Pentchev <pp@storpool.com>  Thu, 19 Jul 2018 14:20:37 +0300
 
 txn-install (0.2.1-1~1) unstable; urgency=medium
 

@@ -1,6 +1,7 @@
 txn-install (0.2.1-1~1) UNRELEASED; urgency=medium
 
   * New upstream version, update the upstream copyright years.
+  * Fill in some debian/control and debian/upstream/metadata information.
 
  -- Peter Pentchev <pp@storpool.com>  Thu, 19 Jul 2018 11:04:53 +0300
 

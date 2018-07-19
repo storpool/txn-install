@@ -5,10 +5,19 @@ Maintainer: Peter Pentchev <pp@storpool.com>
 Build-Depends: debhelper (>> 10), libtest-command-perl, libpath-tiny-perl
 Standards-Version: 4.0.0
 Testsuite: autopkgtest
+Homepage: https://github.com/storpool/txn-install
 
 Package: txn-install
 Architecture: any
 Depends: ${shlibs:Depends}, ${misc:Depends}, diffutils, file, patch
 Multi-Arch: foreign
-Description: FIXME: something
- FIXME: something else
+Description: keep a record of files installed and roll them back
+ The `txn` utility helps automated deployment systems keep track of changes
+ made to files and, later, roll those changes back, e.g. when uninstalling
+ a module.  While some of its functionality (keeping track of newly-installed
+ files) is similar to that of a package management system, its true goal is to
+ record modifications made to e.g. configuration files; most package management
+ systems run into problems when different packages try to modify the same file.
+ The `txn` utility will use the `diff` tool to store a patch into its internal
+ database and, later, when asked to roll the change back, will invoke
+ the `patch` tool to revert it.

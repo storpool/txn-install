@@ -2,3 +2,5 @@ Name: txn-install
 Bug-Submit: mailto:pp@storpool.com
 Contact: Peter Pentchev <pp@storpool.com>
 Security-Contact: Peter Pentchev <pp@storpool.com>
+Repository: https://github.com/storpool/txn-install.git
+Repository-Browse: https://github.com/storpool/txn-install
